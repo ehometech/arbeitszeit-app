@@ -131,7 +131,7 @@ textarea{resize:vertical;min-height:52px}
     </div>
   </div>
   <div id="storageWarn" style="display:none;max-width:340px;margin-top:14px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:12px;color:#b91c1c;text-align:center"></div>
-  <div style="font-size:11px;color:#bbb;margin-top:14px">Version 3 · Speicherung aktiv</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 3 · Speicherung aktiv</div>
 </div>
 
 <!-- MAIN APP -->
@@ -735,6 +735,20 @@ if(!storageWorks()){
   var sw=document.getElementById('storageWarn');
   if(sw){sw.style.display='block';sw.textContent='⚠️ Dieser Browser speichert keine Daten dauerhaft (evtl. privater Modus oder Website-Daten blockiert). Bitte normalen Browser-Tab verwenden und Cookies/Website-Daten erlauben.';}
 }
+(function(){
+  var vi=document.getElementById('verInfo');if(!vi)return;
+  try{
+    var raw=localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      var dd=JSON.parse(raw);
+      var n=Array.isArray(dd.employees)?dd.employees.length:0;
+      var t=dd.savedAt?new Date(dd.savedAt).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'?';
+      vi.textContent='Version 3 · gespeichert: '+t+' ('+n+' Mitarbeiter)';
+    } else {
+      vi.textContent='Version 3 · noch nichts gespeichert';
+    }
+  }catch(e){vi.textContent='Version 3 · Speicher-Lesefehler';}
+})();
 buildUserList();
 
 function exportBackup(){
@@ -951,7 +965,7 @@ function storageWorks(){
 }
 function saveData(){
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos}));
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,savedAt:new Date().toISOString()}));
   }catch(err){/* Speicher nicht verfuegbar oder voll */}
 }
 function loadData(){
