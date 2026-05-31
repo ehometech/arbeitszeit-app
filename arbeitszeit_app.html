@@ -301,8 +301,8 @@ textarea{resize:vertical;min-height:52px}
       <div id="monthEntries"></div>
     </div>
     <div class="brow">
-      <button class="btn" onclick="alert('PDF wird erstellt...')">📄 PDF</button>
-      <button class="btn" onclick="alert('CSV wird erstellt...')">📊 CSV</button>
+      <button class="btn" onclick="exportPDF()">📄 PDF</button>
+      <button class="btn" onclick="exportCSV()">📊 CSV</button>
     </div>
   </div>
 
@@ -726,6 +726,7 @@ function updateUrlaubKonto(){if(isAG())return;var maIdx=activeMaIdx();var ma=emp
 function changeMaPin(){if(isAG())return;var p1=String(document.getElementById('newMaPin').value).trim();var p2=String(document.getElementById('newMaPin2').value).trim();if(!p1||p1.length!==4||isNaN(p1)){alert('Bitte gültigen 4-stelligen PIN eingeben.');return;}if(p1!==p2){alert('PINs stimmen nicht überein.');return;}if(p1===APP_PIN||employees.some(function(ma,i){return String(ma.pin)===p1&&i!==activeMaIdx();})){alert('Dieser PIN ist bereits vergeben.');return;}employees[activeMaIdx()].pin=p1;document.getElementById('newMaPin').value='';document.getElementById('newMaPin2').value='';alert('PIN erfolgreich geändert!');}
 
 // ============ START ============
+loadData();
 buildUserList();
 
 function exportBackup(){
@@ -749,6 +750,7 @@ function importBackup(event){
       employees=data.employees||[];
       entries=data.entries||[];
       fotos=data.fotos||[];
+      saveData();
       alert('Backup erfolgreich importiert.');
       location.reload();
     }catch(err){
@@ -757,6 +759,156 @@ function importBackup(event){
   };
   reader.readAsText(file);
 }
+
+// ============ PDF / CSV EXPORT ============
+function getMonthData(){
+  var prefix=currentYear+'-'+pad(currentMonth+1);
+  var filterIdx=isAG()?parseInt(document.getElementById('filterMA').value):-1;
+  var maIdx=isAG()?filterIdx:activeMaIdx();
+  var me=entries.filter(function(e){return e.dat&&e.dat.startsWith(prefix)&&(maIdx<0||e.ma===maIdx);});
+  return {me:me,maIdx:maIdx};
+}
+function fmtDateDE(iso){
+  if(!iso||iso==='--')return iso||'';
+  var p=iso.split('-');
+  if(p.length<3)return iso;
+  var wd=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  var day=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])).getDay();
+  return wd[day]+' '+p[2]+'.'+p[1]+'.'+p[0];
+}
+function exportPDF(){
+  var d=getMonthData();
+  var me=d.me, maIdx=d.maIdx;
+  var ma=maIdx>=0?employees[maIdx]:null;
+  var firma=document.getElementById('agFirma').value.trim()||'';
+  var totalH=me.reduce(function(a,e){return a+e.h;},0);
+  var arbT=me.filter(function(e){return e.typ==='arbeit';}).length;
+  var soll=ma?ma.soll:7;
+  var ub=totalH-arbT*soll;
+  var krankT=me.filter(function(e){return e.typ==='krank';}).length;
+  var urlG=ma?entries.filter(function(e){return e.ma===maIdx&&e.typ==='urlaub';}).length:null;
+  var allMA=maIdx<0;
+  var rows=me.map(function(e){
+    var mName=employees[e.ma]?employees[e.ma].vn+' '+employees[e.ma].nl:'';
+    return '<tr>'
+      +'<td>'+fmtDateDE(e.dat)+'</td>'
+      +'<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+eColors[e.typ]+';margin-right:5px;vertical-align:middle"></span>'+eLabels[e.typ]+'</td>'
+      +(allMA?'<td>'+mName+'</td>':'')
+      +'<td style="text-align:center">'+(e.start&&e.start!=='--'?e.start:'—')+'</td>'
+      +'<td style="text-align:center">'+(e.end&&e.end!=='--'?e.end:'—')+'</td>'
+      +'<td style="text-align:center">'+(e.pause?e.pause+' min':'—')+'</td>'
+      +'<td style="text-align:right;font-weight:600">'+(e.h?e.h.toFixed(2).replace('.',',')+' h':'—')+'</td>'
+      +'<td>'+(e.ort?'<strong>'+e.ort+'</strong>':'')+((e.ort&&e.notiz)?' · ':'')+( e.notiz||'')+'</td>'
+      +'</tr>';
+  }).join('');
+  var html='<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Arbeitszeitbericht '+monthNames[currentMonth]+' '+currentYear+'</title><style>'
+    +'*{box-sizing:border-box;margin:0;padding:0;}'
+    +'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#111;padding:15mm 18mm;}'
+    +'h1{font-size:20px;font-weight:700;margin-bottom:2px;}'
+    +'.meta{font-size:12px;color:#555;margin-bottom:4px;}'
+    +'.period{font-size:15px;font-weight:600;color:#111;margin-bottom:18px;}'
+    +'.summary{display:flex;gap:12px;margin-bottom:20px;}'
+    +'.stat{background:#f4f4f4;padding:10px 14px;border-radius:6px;flex:1;text-align:center;border-top:3px solid #ddd;}'
+    +'.stat.g{border-color:#16a34a;}.stat.r{border-color:#dc2626;}.stat.b{border-color:#2563eb;}.stat.a{border-color:#d97706;}'
+    +'.stat .val{font-size:17px;font-weight:700;}'
+    +'.stat.g .val{color:#16a34a;}.stat.r .val{color:#dc2626;}.stat.b .val{color:#2563eb;}.stat.a .val{color:#d97706;}'
+    +'.stat .lbl{font-size:10px;color:#666;margin-top:3px;}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:28px;}'
+    +'th{background:#efefef;padding:7px 8px;text-align:left;font-size:11px;border-bottom:2px solid #ccc;white-space:nowrap;}'
+    +'td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:middle;}'
+    +'tr:nth-child(even)td{background:#f9f9f9;}'
+    +'.empty{text-align:center;padding:20px;color:#888;font-style:italic;}'
+    +'.footer{display:flex;justify-content:space-between;margin-top:30px;}'
+    +'.sig{width:200px;}'
+    +'.sig-line{border-top:1px solid #888;padding-top:4px;font-size:10px;color:#666;text-align:center;}'
+    +'@media print{@page{margin:10mm}body{padding:0}}'
+    +'</style></head><body>'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">'
+    +'<div><h1>Arbeitszeitbericht</h1>'
+    +(firma?'<div class="meta">'+firma+'</div>':'')
+    +(ma?'<div class="meta">'+ma.vn+' '+ma.nl+(ma.rolle?' · '+ma.rolle:'')+'</div>':'')
+    +'<div class="period">'+monthNames[currentMonth]+' '+currentYear+'</div></div>'
+    +'<div style="text-align:right;font-size:10px;color:#888">Erstellt am '+new Date().toLocaleDateString('de-DE')+'</div>'
+    +'</div>'
+    +'<div class="summary">'
+    +'<div class="stat g"><div class="val">'+totalH.toFixed(2).replace('.',',')+' h</div><div class="lbl">Gesamtstunden</div></div>'
+    +'<div class="stat '+(ub>=0?'g':'r')+'"><div class="val">'+(ub>=0?'+':'')+ub.toFixed(2).replace('.',',')+' h</div><div class="lbl">Überstunden</div></div>'
+    +'<div class="stat b"><div class="val">'+krankT+'</div><div class="lbl">Kranktage</div></div>'
+    +(ma&&urlG!==null?'<div class="stat a"><div class="val">'+(ma.urlaub-urlG)+' / '+ma.urlaub+'</div><div class="lbl">Urlaubstage übrig</div></div>':'')
+    +'</div>'
+    +'<table><thead><tr>'
+    +'<th>Datum</th><th>Typ</th>'+(allMA?'<th>Mitarbeiter</th>':'')
+    +'<th style="text-align:center">Start</th><th style="text-align:center">Ende</th>'
+    +'<th style="text-align:center">Pause</th><th style="text-align:right">Netto</th><th>Ort / Notiz</th>'
+    +'</tr></thead><tbody>'
+    +(rows||'<tr><td colspan="'+(allMA?8:7)+'" class="empty">Keine Einträge in diesem Monat.</td></tr>')
+    +'</tbody></table>'
+    +'<div class="footer">'
+    +'<div class="sig"><div class="sig-line">Datum &amp; Unterschrift Mitarbeiter</div></div>'
+    +'<div class="sig"><div class="sig-line">Datum &amp; Unterschrift Arbeitgeber</div></div>'
+    +'</div>'
+    +'</body></html>';
+  var w=window.open('','_blank','width=960,height=720');
+  if(!w){alert('Bitte Popup-Blocker für diese Seite deaktivieren.');return;}
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function(){w.focus();w.print();},400);
+}
+function exportCSV(){
+  var d=getMonthData();
+  var me=d.me, maIdx=d.maIdx;
+  var allMA=maIdx<0;
+  var wd=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  var header=['Datum','Wochentag','Typ'];
+  if(allMA)header.push('Mitarbeiter');
+  header=header.concat(['Start','Ende','Pause (min)','Netto (h)','Ort','Notiz']);
+  var rows=me.map(function(e){
+    var p=e.dat?e.dat.split('-'):['','',''];
+    var wday=e.dat?wd[new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])).getDay()]:'';
+    var row=[p.length===3?p[2]+'.'+p[1]+'.'+p[0]:'',wday,eLabels[e.typ]||e.typ];
+    if(allMA)row.push(employees[e.ma]?employees[e.ma].vn+' '+employees[e.ma].nl:'');
+    row=row.concat([
+      (e.start&&e.start!=='--'?e.start:''),
+      (e.end&&e.end!=='--'?e.end:''),
+      e.pause||0,
+      (e.h?e.h.toFixed(2).replace('.',','):'0,00'),
+      e.ort||'',
+      e.notiz||''
+    ]);
+    return row;
+  });
+  function csvEsc(c){var s=String(c);return(s.includes(';')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;}
+  var csv='\uFEFF'+[header].concat(rows).map(function(r){return r.map(csvEsc).join(';');}).join('\r\n');
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='arbeitszeit-'+monthNames[currentMonth]+'-'+currentYear+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ============ PERSISTENZ (localStorage) ============
+var STORAGE_KEY='arbeitszeit_app_data';
+function saveData(){
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos}));
+  }catch(err){/* Speicher nicht verfuegbar oder voll */}
+}
+function loadData(){
+  try{
+    var raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    if(data.APP_PIN)APP_PIN=data.APP_PIN;
+    if(Array.isArray(data.employees))employees=data.employees;
+    if(Array.isArray(data.entries))entries=data.entries;
+    if(Array.isArray(data.fotos))fotos=data.fotos;
+  }catch(err){/* defekte gespeicherte Daten ignorieren */}
+}
+// Automatisch speichern: regelmaessig + beim Verlassen/Verstecken der Seite (auch mobil)
+setInterval(saveData,1500);
+window.addEventListener('pagehide',saveData);
+document.addEventListener('visibilitychange',function(){if(document.hidden)saveData();});
 
 </script>
 </body>
