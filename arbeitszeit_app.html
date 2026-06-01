@@ -477,6 +477,7 @@ var STORAGE_KEY='arbeitszeit_app_data';
 var firebaseReady=false;   // true, sobald Verbindung steht
 var docRef=null;           // Verweis auf das Firmen-Dokument
 var applyingSnapshot=false;// verhindert Schleifen beim Empfangen
+var saveLock=0;            // Snapshots nach lokalem Speichern ignorieren (ms)
 
 var eColors={arbeit:'#16a34a',urlaub:'#2563eb',krank:'#dc2626',feiertag:'#d97706',schule:'#7c3aed',sonder:'#888'};
 var eLabels={arbeit:'Arbeit',urlaub:'Urlaub',krank:'Krank',feiertag:'Feiertag',schule:'Schule',sonder:'Sonderfall'};
@@ -997,8 +998,10 @@ function loadLocal(){
   }catch(err){}
 }
 // Zentrales Speichern: lokal + Cloud
+// Zentrales Speichern: lokal + Cloud
 function saveData(){
   saveLocal();
+  saveLock=Date.now()+30000; // 30 Sek. lang keine Cloud-Snapshots uebernehmen
   pushToCloud();
 }
 function pushToCloud(){
@@ -1037,29 +1040,16 @@ function initFirebase(){
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
     var db=firebase.firestore();
-    // Offline-Funktion (App laeuft auch kurz ohne Netz)
-    try{ db.enablePersistence({synchronizeTabs:true}).catch(function(){}); }catch(e){}
+    // Kein enablePersistence: verhindert Revert-Snapshots nach fehlgeschlagenen Schreibvorgaengen
     docRef=db.collection('arbeitszeit').doc(COMPANY_ID);
     firebaseReady=true;
     updateVerInfo();
     docRef.onSnapshot(function(snap){
+      // Nach einem lokalen Speichern 30 Sek. lang keine Cloud-Daten uebernehmen.
+      // Verhindert, dass Firestore-Revert-Snapshots den gerade geaenderten PIN zuruecksetzen.
+      if(Date.now()<saveLock){ return; }
       if(snap.exists){
         var d=snap.data();
-        // Zeitstempel vergleichen: lokale Daten neuer? → Cloud aktualisieren statt überschreiben
-        var cloudTime=d.savedAt?new Date(d.savedAt).getTime():0;
-        try{
-          var localRaw=localStorage.getItem(STORAGE_KEY);
-          if(localRaw){
-            var localData=JSON.parse(localRaw);
-            var localTime=localData.savedAt?new Date(localData.savedAt).getTime():0;
-            if(localTime>cloudTime+3000){
-              // Lokale Daten sind mehr als 3 Sek. neuer → Cloud mit lokalen Daten beschreiben
-              pushToCloud();
-              return;
-            }
-          }
-        }catch(e){}
-        // Cloud-Daten sind aktueller → übernehmen
         applyingSnapshot=true;
         if(d.APP_PIN)APP_PIN=d.APP_PIN;
         if(Array.isArray(d.employees))employees=d.employees;
@@ -1070,7 +1060,7 @@ function initFirebase(){
         saveLocal();
         refreshAll();
       } else {
-        // Dokument existiert noch nicht → mit aktuellen (lokalen) Daten anlegen
+        // Dokument existiert noch nicht: aktuellen lokalen Stand hochladen
         pushToCloud();
       }
     }, function(err){
