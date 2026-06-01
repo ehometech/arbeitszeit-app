@@ -449,6 +449,7 @@ var timerSec=0, timerRunning=false, timerInt=null, pauseMins=0;
 var editingMaIdx=-1;
 var loginTarget=null;
 var pinBuffer='';
+var STORAGE_KEY='arbeitszeit_app_data';
 
 var eColors={arbeit:'#16a34a',urlaub:'#2563eb',krank:'#dc2626',feiertag:'#d97706',schule:'#7c3aed',sonder:'#888'};
 var eLabels={arbeit:'Arbeit',urlaub:'Urlaub',krank:'Krank',feiertag:'Feiertag',schule:'Schule',sonder:'Sonderfall'};
@@ -958,7 +959,6 @@ function exportCSV(){
 }
 
 // ============ PERSISTENZ (localStorage) ============
-var STORAGE_KEY='arbeitszeit_app_data';
 function storageWorks(){
   try{var t='__test__';localStorage.setItem(t,'1');localStorage.removeItem(t);return true;}
   catch(err){return false;}
