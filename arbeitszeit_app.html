@@ -1045,6 +1045,21 @@ function initFirebase(){
     docRef.onSnapshot(function(snap){
       if(snap.exists){
         var d=snap.data();
+        // Zeitstempel vergleichen: lokale Daten neuer? → Cloud aktualisieren statt überschreiben
+        var cloudTime=d.savedAt?new Date(d.savedAt).getTime():0;
+        try{
+          var localRaw=localStorage.getItem(STORAGE_KEY);
+          if(localRaw){
+            var localData=JSON.parse(localRaw);
+            var localTime=localData.savedAt?new Date(localData.savedAt).getTime():0;
+            if(localTime>cloudTime+3000){
+              // Lokale Daten sind mehr als 3 Sek. neuer → Cloud mit lokalen Daten beschreiben
+              pushToCloud();
+              return;
+            }
+          }
+        }catch(e){}
+        // Cloud-Daten sind aktueller → übernehmen
         applyingSnapshot=true;
         if(d.APP_PIN)APP_PIN=d.APP_PIN;
         if(Array.isArray(d.employees))employees=d.employees;
@@ -1055,7 +1070,7 @@ function initFirebase(){
         saveLocal();
         refreshAll();
       } else {
-        // Dokument existiert noch nicht -> mit aktuellen (lokalen) Daten anlegen
+        // Dokument existiert noch nicht → mit aktuellen (lokalen) Daten anlegen
         pushToCloud();
       }
     }, function(err){
