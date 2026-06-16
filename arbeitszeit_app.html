@@ -839,7 +839,12 @@ function changeMaPin(){if(isAG())return;var p1=String(document.getElementById('n
 // ============ GOOGLE CALENDAR (öffentlich, ohne OAuth) ============
 function loadCalendarEvents(){
   var listEl=document.getElementById('calendarList');
+  if(!listEl){alert('Fehler: calendarList Element nicht gefunden.');return;}
   listEl.innerHTML='⏳ Lade Termine...';
+  if(!CALENDAR_ID||CALENDAR_ID.indexOf('@')<0){
+    listEl.innerHTML='⚠️ Fehler: Keine gültige Calendar-ID konfiguriert.';
+    return;
+  }
   var now=new Date();
   var timeMin=now.toISOString();
   var timeMax=new Date(now.getFullYear(),now.getMonth(),now.getDate()+30).toISOString();
@@ -849,7 +854,12 @@ function loadCalendarEvents(){
     +'&timeMax='+encodeURIComponent(timeMax)
     +'&singleEvents=true&orderBy=startTime&maxResults=15';
   fetch(url).then(function(res){
-    if(!res.ok){throw new Error('HTTP '+res.status);}
+    if(!res.ok){
+      return res.json().then(function(errBody){
+        var msg=(errBody&&errBody.error&&errBody.error.message)?errBody.error.message:('HTTP '+res.status);
+        throw new Error(msg);
+      }).catch(function(){throw new Error('HTTP '+res.status);});
+    }
     return res.json();
   }).then(function(data){
     var events=data.items||[];
@@ -866,8 +876,7 @@ function loadCalendarEvents(){
         +'</div>';
     }).join('');
   }).catch(function(err){
-    listEl.innerHTML='⚠️ Termine konnten nicht geladen werden. ('+err.message+')';
-    console.warn('Calendar API Fehler:',err);
+    listEl.innerHTML='⚠️ Fehler: '+err.message;
   });
 }
 
