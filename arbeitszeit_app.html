@@ -455,9 +455,9 @@ var CLOUD_NAME = 'ddbectnao';
 var UPLOAD_PRESET = 'personliche_arbeitsstunden';
 var CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/image/upload';
 
-// ============ GOOGLE CALENDAR CONFIG ============
-var GOOGLE_CLIENT_ID = '290855467613-k6s9flgerv71keeu7dfup68881jnb9fc.apps.googleusercontent.com';
-var CALENDAR_SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
+// ============ GOOGLE CALENDAR CONFIG (öffentlich, ohne OAuth) ============
+var GOOGLE_MAPS_API_KEY = 'AIzaSyAzQiFuH3yAd5jpD8xVegSs2UwT6pLTHEE'; // gleicher Key wird für Calendar API genutzt
+var CALENDAR_ID = 'ecb5a97d53f38f3a877217406cab1a3081e91838860011160b67d6000a8f09d0@group.calendar.google.com';
 
 // ============ STATE ============
 var APP_PIN = '1234';
@@ -836,24 +836,38 @@ function deleteAllEntries(){if(confirm('Alle Einträge löschen?')){entries=[];s
 function updateUrlaubKonto(){if(isAG())return;var maIdx=activeMaIdx();var ma=employees[maIdx];if(!ma)return;var gen=entries.filter(function(e){return e.ma===maIdx&&e.typ==='urlaub';}).length;var ubr=ma.urlaub-gen;document.getElementById('urlaubGen').textContent=gen;document.getElementById('urlaubUbr').textContent=ubr;document.getElementById('urlaubBar').style.width=Math.min(100,gen/ma.urlaub*100)+'%';document.getElementById('urlaubText').textContent=gen+' von '+ma.urlaub+' Tagen verbraucht';}
 function changeMaPin(){if(isAG())return;var p1=String(document.getElementById('newMaPin').value).trim();var p2=String(document.getElementById('newMaPin2').value).trim();if(!p1||p1.length!==4||isNaN(p1)){alert('Bitte gültigen 4-stelligen PIN eingeben.');return;}if(p1!==p2){alert('PINs stimmen nicht überein.');return;}if(p1===APP_PIN||employees.some(function(ma,i){return String(ma.pin)===p1&&i!==activeMaIdx();})){alert('Dieser PIN ist bereits vergeben.');return;}employees[activeMaIdx()].pin=p1;saveData();document.getElementById('newMaPin').value='';document.getElementById('newMaPin2').value='';alert('PIN erfolgreich geändert!');}
 
-// ============ GOOGLE CALENDAR ============
+// ============ GOOGLE CALENDAR (öffentlich, ohne OAuth) ============
 function loadCalendarEvents(){
-  if(!window.gapi){alert('Google API noch nicht geladen.');return;}
-  gapi.load('client:auth2',function(){
-    gapi.client.init({apiKey:GOOGLE_CLIENT_ID,clientId:GOOGLE_CLIENT_ID,discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],scope:CALENDAR_SCOPES}).then(function(){
-      var auth=gapi.auth2.getAuthInstance();
-      if(!auth.isSignedIn.get()){auth.signIn();}
-      var now=new Date();
-      var timeMin=new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString();
-      var timeMax=new Date(now.getFullYear(),now.getMonth(),now.getDate()+30).toISOString();
-      gapi.client.calendar.events.list({calendarId:'primary',timeMin:timeMin,timeMax:timeMax,showDeleted:false,singleEvents:true,orderBy:'startTime'}).then(function(response){
-        var events=response.result.items||[];
-        var html='<div style="font-size:12px">';
-        if(events.length){html+=events.slice(0,5).map(function(e){var start=new Date(e.start.dateTime||e.start.date);return '<div style="padding:6px 0;border-bottom:1px solid #f0f0f0"><div style="font-weight:500">'+e.summary+'</div><div style="color:#888;font-size:11px">'+start.toLocaleDateString('de')+'</div></div>';}).join('');}else{html+='Keine Termine in den nächsten 30 Tagen.';}
-        html+='</div>';
-        document.getElementById('calendarList').innerHTML=html;
-      });
-    });
+  var listEl=document.getElementById('calendarList');
+  listEl.innerHTML='⏳ Lade Termine...';
+  var now=new Date();
+  var timeMin=now.toISOString();
+  var timeMax=new Date(now.getFullYear(),now.getMonth(),now.getDate()+30).toISOString();
+  var url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(CALENDAR_ID)+'/events'
+    +'?key='+GOOGLE_MAPS_API_KEY
+    +'&timeMin='+encodeURIComponent(timeMin)
+    +'&timeMax='+encodeURIComponent(timeMax)
+    +'&singleEvents=true&orderBy=startTime&maxResults=15';
+  fetch(url).then(function(res){
+    if(!res.ok){throw new Error('HTTP '+res.status);}
+    return res.json();
+  }).then(function(data){
+    var events=data.items||[];
+    if(!events.length){listEl.innerHTML='Keine Termine in den nächsten 30 Tagen.';return;}
+    listEl.innerHTML=events.map(function(e){
+      var startRaw=e.start.dateTime||e.start.date;
+      var start=new Date(startRaw);
+      var dateStr=start.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'});
+      var timeStr=e.start.dateTime?start.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'Ganztägig';
+      var title=e.summary||'(Ohne Titel)';
+      return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0">'
+        +'<div style="font-weight:500">'+title+'</div>'
+        +'<div style="color:#888;font-size:11px">'+dateStr+' · '+timeStr+(e.location?' · '+e.location:'')+'</div>'
+        +'</div>';
+    }).join('');
+  }).catch(function(err){
+    listEl.innerHTML='⚠️ Termine konnten nicht geladen werden. ('+err.message+')';
+    console.warn('Calendar API Fehler:',err);
   });
 }
 
@@ -1130,10 +1144,6 @@ buildUserList();
 window.addEventListener('pagehide',saveData);
 document.addEventListener('visibilitychange',function(){if(document.hidden)saveData();});
 
-// Google Calendar Script
-var script=document.createElement('script');
-script.src='https://apis.google.com/js/platform.js';
-document.head.appendChild(script);
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
