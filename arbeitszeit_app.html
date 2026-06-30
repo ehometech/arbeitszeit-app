@@ -902,10 +902,10 @@ function loadCalendarEvents(){
     +'&singleEvents=true&orderBy=startTime&maxResults=15';
   fetch(url).then(function(res){
     if(!res.ok){
-      return res.json().then(function(errBody){
+      return res.json().catch(function(){return null;}).then(function(errBody){
         var msg=(errBody&&errBody.error&&errBody.error.message)?errBody.error.message:('HTTP '+res.status);
         throw new Error(msg);
-      }).catch(function(){throw new Error('HTTP '+res.status);});
+      });
     }
     return res.json();
   }).then(function(data){
