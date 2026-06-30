@@ -472,6 +472,7 @@ var firma = {name:'',str:'',plz:''};
 var currentUser = null;
 var currentMonth, currentYear;
 var timerSec=0, timerRunning=false, timerInt=null, pauseMins=0;
+var timers = {}; // {userKey: {startTs:<ms epoch>, pauseMins:<n>}} -- persisted so a running timer survives app close / re-login
 var editingMaIdx=-1;
 var loginTarget=null;
 var pinBuffer='';
@@ -503,6 +504,7 @@ function fmtH(s){return pad(Math.floor(s/3600))+':'+pad(Math.floor(s%3600/60))+'
 function getInitials(vn,nl){return ((vn||'')[0]||'').toUpperCase()+((nl||'')[0]||'').toUpperCase();}
 function isAG(){return currentUser&&currentUser.type==='ag';}
 function activeMaIdx(){return currentUser&&currentUser.type==='ma'?currentUser.idx:-1;}
+function userKey(){return isAG()?'ag':('ma_'+activeMaIdx());}
 
 // ============ ONLINE/OFFLINE DETECTION ============
 window.addEventListener('online',function(){isOnline=true;syncOfflineQueue();updateSyncStatus();});
@@ -600,7 +602,7 @@ function initApp(){
     updateUrlaubKonto();
     getGPS();
   }
-  gotoTab('heute');renderRecent();renderMonth();renderGalerie();
+  gotoTab('heute');renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
 
   var ub=document.getElementById('uploadBox');
   ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
@@ -633,13 +635,25 @@ function getWoche(){if(isAG())return 35;var ma=employees[activeMaIdx()];return m
 
 function startTimer(){
   if(timerRunning)return;timerRunning=true;
-  var now=new Date();
+  var key=userKey();
+  if(!timers[key]){timers[key]={startTs:Date.now()-timerSec*1000,pauseMins:pauseMins};}
+  saveData();
+  var startDate=new Date(timers[key].startTs);
   document.getElementById('startBtn').disabled=true;document.getElementById('stopBtn').disabled=false;
   document.getElementById('statusBadge').className='bdg b';document.getElementById('statusBadge').textContent='● Aktiv';
-  document.getElementById('timerSub').textContent='Gestartet um '+pad(now.getHours())+':'+pad(now.getMinutes());
+  document.getElementById('timerSub').textContent='Gestartet um '+pad(startDate.getHours())+':'+pad(startDate.getMinutes());
+  runTimerInterval();
+}
+function runTimerInterval(){
+  var key=userKey();
   var soll=getSoll();var woche=getWoche();
+  clearInterval(timerInt);
   timerInt=setInterval(function(){
-    timerSec++;document.getElementById('timerDisp').textContent=fmtH(timerSec);
+    var t=timers[key];
+    if(!t){clearInterval(timerInt);return;}
+    timerSec=Math.max(0,Math.floor((Date.now()-t.startTs)/1000));
+    pauseMins=t.pauseMins||0;
+    document.getElementById('timerDisp').textContent=fmtH(timerSec);
     var net=Math.max(0,(timerSec-pauseMins*60)/3600);
     document.getElementById('todayNet').textContent=net.toFixed(2).replace('.',',')+' h';
     var ov=net-soll;var el=document.getElementById('todayOver');
@@ -654,8 +668,41 @@ function startTimer(){
     else{bar.style.background='#16a34a';amp.className='bdg g';amp.textContent='Auf Kurs';}
   },1000);
 }
-function stopTimer(){if(!timerRunning)return;clearInterval(timerInt);timerRunning=false;document.getElementById('startBtn').disabled=false;document.getElementById('stopBtn').disabled=true;document.getElementById('statusBadge').className='bdg n';document.getElementById('statusBadge').textContent='Gestoppt';document.getElementById('timerSub').textContent='Gestoppt — '+fmtH(timerSec)+' erfasst';}
-function addPause(m){pauseMins+=m;alert(m+' Min Pause. Gesamt: '+pauseMins+' Min.');}
+function restoreTimerIfRunning(){
+  var key=userKey();
+  var t=timers[key];
+  if(t){
+    timerRunning=true;
+    timerSec=Math.max(0,Math.floor((Date.now()-t.startTs)/1000));
+    pauseMins=t.pauseMins||0;
+    document.getElementById('startBtn').disabled=true;document.getElementById('stopBtn').disabled=false;
+    document.getElementById('statusBadge').className='bdg b';document.getElementById('statusBadge').textContent='● Aktiv';
+    var startDate=new Date(t.startTs);
+    document.getElementById('timerSub').textContent='Gestartet um '+pad(startDate.getHours())+':'+pad(startDate.getMinutes());
+    document.getElementById('timerDisp').textContent=fmtH(timerSec);
+    runTimerInterval();
+  } else {
+    timerRunning=false;timerSec=0;pauseMins=0;
+    document.getElementById('startBtn').disabled=false;document.getElementById('stopBtn').disabled=true;
+    document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';
+    document.getElementById('timerSub').textContent='Nicht gestartet';
+    document.getElementById('timerDisp').textContent='00:00:00';
+    document.getElementById('todayNet').textContent='0,00 h';
+    document.getElementById('todayOver').textContent='+0,00 h';
+  }
+}
+function stopTimer(){
+  if(!timerRunning)return;
+  clearInterval(timerInt);timerRunning=false;
+  delete timers[userKey()];saveData();
+  document.getElementById('startBtn').disabled=false;document.getElementById('stopBtn').disabled=true;document.getElementById('statusBadge').className='bdg n';document.getElementById('statusBadge').textContent='Gestoppt';document.getElementById('timerSub').textContent='Gestoppt — '+fmtH(timerSec)+' erfasst';
+}
+function addPause(m){
+  pauseMins+=m;
+  var key=userKey();
+  if(timers[key]){timers[key].pauseMins=pauseMins;saveData();}
+  alert(m+' Min Pause. Gesamt: '+pauseMins+' Min.');
+}
 function saveQuick(){if(timerSec===0){alert('Kein aktiver Timer.');return;}stopTimer();var net=Math.max(0,(timerSec-pauseMins*60)/3600);var maIdx=isAG()?0:activeMaIdx();entries.unshift({ma:maIdx,dat:todayStr(),typ:'arbeit',start:'--',end:'--',pause:pauseMins,ort:'',notiz:'',h:parseFloat(net.toFixed(2))});timerSec=0;pauseMins=0;document.getElementById('timerDisp').textContent='00:00:00';document.getElementById('timerSub').textContent='Nicht gestartet';document.getElementById('todayNet').textContent='0,00 h';document.getElementById('todayOver').textContent='+0,00 h';document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';renderRecent();saveData();alert('Gespeichert!');}
 
 // ============ RECENT ============
@@ -882,7 +929,7 @@ function loadCalendarEvents(){
 
 // ============ BACKUP / IMPORT ============
 function exportBackup(){
-  var data={APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma};
+  var data={APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers};
   var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   var a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -943,7 +990,7 @@ function getMonthStats(){
   return {me:me,maIdx:maIdx,ma:ma,firma:firmaN,totalH:totalH,ub:ub,krankT:krankT,urlG:urlG,allMA:(maIdx<0)};
 }
 function exportPDF(){
-  var hasLib = window.jspdf && window.jspdf.jsPDF;
+  var hasLib = window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && typeof window.jspdf.jsPDF.API.autoTable==='function';
   if(!hasLib){ return exportPDFprint(); }
   try{
     var s=getMonthStats();
@@ -963,8 +1010,41 @@ function exportPDF(){
     var summ='Gesamt: '+s.totalH.toFixed(2).replace('.',',')+' h     Überstunden: '+(s.ub>=0?'+':'')+s.ub.toFixed(2).replace('.',',')+' h     Kranktage: '+s.krankT;
     if(s.ma&&s.urlG!==null)summ+='     Urlaub übrig: '+(s.ma.urlaub-s.urlG)+'/'+s.ma.urlaub;
     doc.text(summ,M,y);y+=4;
-    alert('PDF-Export: Bitte manuell drucken via Browser-Print oder versuchen Sie später mit vollständiger jsPDF-Library');
+    var head=s.allMA?[['Datum','Typ','Mitarbeiter','Start','Ende','Pause','Netto','Ort / Notiz']]
+                    :[['Datum','Typ','Start','Ende','Pause','Netto','Ort / Notiz']];
+    var body=s.me.map(function(e){
+      var datum=fmtDateDE(e.dat);
+      var typ=eLabels[e.typ]||e.typ;
+      var start=(e.start&&e.start!=='--')?e.start:'-';
+      var ende=(e.end&&e.end!=='--')?e.end:'-';
+      var pause=e.pause?e.pause+' min':'-';
+      var netto=e.h?e.h.toFixed(2).replace('.',',')+' h':'-';
+      var on=(e.ort||'')+((e.ort&&e.notiz)?' - ':'')+(e.notiz||'');
+      if(s.allMA){var mn=employees[e.ma]?employees[e.ma].vn+' '+employees[e.ma].nl:'';return [datum,typ,mn,start,ende,pause,netto,on];}
+      return [datum,typ,start,ende,pause,netto,on];
+    });
+    if(body.length===0){body=[[{content:'Keine Einträge in diesem Monat.',colSpan:(s.allMA?8:7),styles:{halign:'center',textColor:[136,136,136],fontStyle:'italic'}}]];}
+    var colS=s.allMA?{3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'right',fontStyle:'bold'}}
+                    :{2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'right',fontStyle:'bold'}};
+    doc.autoTable({
+      startY:y+2,head:head,body:body,theme:'grid',
+      styles:{font:'helvetica',fontSize:8.5,cellPadding:1.8,textColor:[40,40,40],lineColor:[225,225,225],lineWidth:0.1,overflow:'linebreak'},
+      headStyles:{fillColor:[31,41,55],textColor:[255,255,255],fontStyle:'bold',fontSize:8.5},
+      alternateRowStyles:{fillColor:[248,248,248]},
+      columnStyles:colS,margin:{left:M,right:M}
+    });
+    var fy=(doc.lastAutoTable&&doc.lastAutoTable.finalY)?doc.lastAutoTable.finalY:y+10;
+    var sy=fy+24;
+    if(sy>278){doc.addPage();sy=40;}
+    doc.setDrawColor(140,140,140);doc.setLineWidth(0.2);
+    doc.line(M,sy,M+72,sy);doc.line(PW-M-72,sy,PW-M,sy);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(110,110,110);
+    doc.text('Datum & Unterschrift Mitarbeiter',M,sy+4);
+    doc.text('Datum & Unterschrift Arbeitgeber',PW-M-72,sy+4);
+    var fname='Arbeitszeit_'+monthNames[currentMonth]+'_'+currentYear+(s.ma?'_'+s.ma.nl:'')+'.pdf';
+    doc.save(fname);
   }catch(err){
+    console.warn('PDF-Erstellung fehlgeschlagen, falle zurück auf Druckansicht:',err);
     exportPDFprint();
   }
 }
@@ -1061,7 +1141,7 @@ function storageWorks(){
 }
 function saveLocal(){
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,savedAt:new Date().toISOString()}));
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,savedAt:new Date().toISOString()}));
   }catch(err){}
 }
 function loadLocal(){
@@ -1074,6 +1154,7 @@ function loadLocal(){
     if(Array.isArray(data.entries))entries=data.entries;
     if(Array.isArray(data.fotos))fotos=data.fotos;
     if(Array.isArray(data.baustellen))baustellen=data.baustellen;
+    if(data.timers)timers=data.timers;
     if(data.firma)firma=data.firma;
   }catch(err){}
 }
@@ -1084,7 +1165,7 @@ function saveData(){
 }
 function pushToCloud(){
   if(firebaseReady && docRef && !applyingSnapshot){
-    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,savedAt:new Date().toISOString()})
+    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,savedAt:new Date().toISOString()})
       .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);});
   }
 }
@@ -1098,7 +1179,7 @@ function refreshAll(){
     var ap=document.getElementById('agPlz');
     if(ap && document.activeElement!==ap){ap.value=firma.plz||'';}
     var cp=document.getElementById('currentPinDisplay');if(cp)cp.textContent=APP_PIN;
-    renderRecent();renderMonth();renderGalerie();
+    renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
     if(isAG()){renderMAListe();renderAgFilterSelect();}
     else{updateUrlaubKonto();}
   }
@@ -1125,6 +1206,7 @@ function initFirebase(){
         if(Array.isArray(d.entries))entries=d.entries;
         if(Array.isArray(d.fotos))fotos=d.fotos;
         if(Array.isArray(d.baustellen))baustellen=d.baustellen;
+        if(d.timers)timers=d.timers;
         if(d.firma)firma=d.firma;
         applyingSnapshot=false;
         saveLocal();
@@ -1155,6 +1237,6 @@ document.addEventListener('visibilitychange',function(){if(document.hidden)saveD
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-</head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </body>
 </html>
