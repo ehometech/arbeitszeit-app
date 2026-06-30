@@ -480,6 +480,7 @@ var STORAGE_KEY='arbeitszeit_app_data_v5';
 
 // Firebase & Offline
 var firebaseReady=false;
+var cloudSynced=false; // becomes true only AFTER the first real snapshot (or confirmed-empty doc) is received -- prevents pushing default/local-only data over real cloud data before it has loaded
 var docRef=null;
 var applyingSnapshot=false;
 var saveLock=0;
@@ -1164,7 +1165,7 @@ function saveData(){
   pushToCloud();
 }
 function pushToCloud(){
-  if(firebaseReady && docRef && !applyingSnapshot){
+  if(firebaseReady && cloudSynced && docRef && !applyingSnapshot){
     docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,savedAt:new Date().toISOString()})
       .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);});
   }
@@ -1197,7 +1198,7 @@ function initFirebase(){
     docRef=db.collection('arbeitszeit').doc(COMPANY_ID);
     firebaseReady=true;
     docRef.onSnapshot(function(snap){
-      if(Date.now()<saveLock){ return; }
+      if(Date.now()<saveLock){ cloudSynced=true; pushToCloud(); return; }
       if(snap.exists){
         var d=snap.data();
         applyingSnapshot=true;
@@ -1209,9 +1210,11 @@ function initFirebase(){
         if(d.timers)timers=d.timers;
         if(d.firma)firma=d.firma;
         applyingSnapshot=false;
+        cloudSynced=true;
         saveLocal();
         refreshAll();
       } else {
+        cloudSynced=true;
         pushToCloud();
       }
     }, function(err){
