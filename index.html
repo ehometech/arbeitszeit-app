@@ -88,6 +88,12 @@ textarea{resize:vertical;min-height:52px}
 .user-item:hover{background:#f5f5f5}
 .shake{animation:shake .4s ease}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+/* Protokoll */
+.sig-wrap{position:relative;border:1px solid #d4d4d4;border-radius:8px;overflow:hidden;margin-bottom:4px}
+.sig-pad{display:block;width:100%;height:140px;background:#fff;touch-action:none}
+.sig-clear{position:absolute;top:6px;right:6px;flex:0;padding:3px 8px;font-size:11px}
+.string-row{border:1px solid #e5e5e5;border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fafafa}
+.mat-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
 #mapContainer{width:100%;height:300px;border-radius:8px;margin:8px 0;background:#e5e5e5}
 .gps-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:3px 6px;background:#e0f2fe;color:#0369a1;border-radius:4px;margin-top:6px}
 .offline-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:4px 8px;background:#fee2e2;color:#991b1b;border-radius:6px;margin-bottom:8px}
@@ -131,7 +137,7 @@ textarea{resize:vertical;min-height:52px}
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 5 · Offline + Maps + Calendar</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 6 · Protokoll + Abnahme</div>
 </div>
 
 <!-- MAIN APP -->
@@ -141,6 +147,7 @@ textarea{resize:vertical;min-height:52px}
     <button class="nb" onclick="gotoTab('eintrag')">➕<br>Eintrag</button>
     <button class="nb" onclick="gotoTab('fotos')">📸<br>Fotos</button>
     <button class="nb" onclick="gotoTab('monat')">📅<br>Monat</button>
+    <button class="nb" onclick="gotoTab('protokoll')">📋<br>Protokoll</button>
     <button class="nb agOnly" onclick="gotoTab('ag')" style="display:none">🏢<br>Arbeitgeber</button>
     <button class="nb" onclick="gotoTab('profil')">👤<br>Profil</button>
   </div>
@@ -320,6 +327,252 @@ textarea{resize:vertical;min-height:52px}
     </div>
   </div>
 
+  <!-- PROTOKOLL (Inbetriebnahme / Abnahme nach DIN EN 62446) -->
+  <div class="tab" id="tab-protokoll">
+
+    <!-- LISTE gespeicherter Protokolle -->
+    <div id="protListView">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="sec" style="margin:0">Prüf- &amp; Abnahmeprotokolle (<span id="protCount">0</span>)</div>
+          <button class="btn inf" style="flex:0;font-size:12px;padding:6px 12px" onclick="newProtokoll()">+ Neues Protokoll</button>
+        </div>
+        <div id="protListe"></div>
+      </div>
+      <div class="card">
+        <div class="sec">Komponenten-Datenbank</div>
+        <div style="font-size:12px;color:#888">Gespeicherte Hersteller/Typen werden beim nächsten Protokoll automatisch vorgeschlagen und ausgefüllt.</div>
+        <div class="m2" style="margin-top:8px">
+          <div class="met"><div class="ml">PV-Module</div><div class="mv b" id="dbCountMod">0</div></div>
+          <div class="met"><div class="ml">Wechselrichter</div><div class="mv b" id="dbCountWr">0</div></div>
+        </div>
+        <div class="m2">
+          <div class="met"><div class="ml">Zählerschränke</div><div class="mv b" id="dbCountZsk">0</div></div>
+          <div class="met"><div class="ml">Materialien</div><div class="mv b" id="dbCountMat">0</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORMULAR -->
+    <div id="protFormView" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <button class="btn" style="flex:0;padding:6px 10px" onclick="closeProtokollForm()">← Liste</button>
+        <div style="flex:1;font-size:15px;font-weight:600" id="protFormTitle">Neues Protokoll</div>
+      </div>
+
+      <div class="card">
+        <div class="sec">Protokoll · DIN EN 62446 (VDE 0126-23)</div>
+        <div class="r2">
+          <div><span class="lbl">Prüfbericht Nr.</span><input type="text" id="pNr" placeholder="z.B. 2026-014"></div>
+          <div><span class="lbl">Datum der Prüfung</span><input type="date" id="pDatum"></div>
+        </div>
+        <span class="lbl">Grund der Prüfung</span>
+        <select id="pArt"><option value="erst">Erstprüfung</option><option value="wieder">Wiederholungsprüfung</option></select>
+        <span class="lbl">Baustelle / Projekt</span>
+        <input type="text" id="pBaustelle" list="dlProtBaustellen" placeholder="z.B. Musterstr. 5" onchange="protFotoCount()">
+        <datalist id="dlProtBaustellen"></datalist>
+        <div class="r2">
+          <div><span class="lbl">Nächster Prüftermin</span><input type="date" id="pNextDatum"></div>
+          <div><span class="lbl">Verwendete Prüfgeräte</span><input type="text" id="pGeraete" placeholder="z.B. Benning PV 2"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec">Betreiber (Kunde)</div>
+        <span class="lbl">Name</span><input type="text" id="pKName" placeholder="Max Mustermann">
+        <div class="r2">
+          <div><span class="lbl">Straße / Nr.</span><input type="text" id="pKStr"></div>
+          <div><span class="lbl">PLZ Ort</span><input type="text" id="pKPlz"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">Telefon / Mobil</span><input type="text" id="pKTel"></div>
+          <div><span class="lbl">E-Mail</span><input type="email" id="pKMail"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec">Errichter / Installateur</div>
+        <span class="lbl">Firma</span><input type="text" id="pEName">
+        <div class="r2">
+          <div><span class="lbl">Straße / Nr.</span><input type="text" id="pEStr"></div>
+          <div><span class="lbl">PLZ Ort</span><input type="text" id="pEPlz"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">Mobil</span><input type="text" id="pETel"></div>
+          <div><span class="lbl">E-Mail</span><input type="email" id="pEMail"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec">Anlage / Inbetriebnahme</div>
+        <span class="lbl">Anlagenstandort (wenn abweichend)</span>
+        <input type="text" id="pAStandort" placeholder="Straße, PLZ Ort">
+        <div class="r2">
+          <div><span class="lbl">Ausrichtung</span><input type="text" id="pAAusr" placeholder="z.B. Süd / -10° Ost"></div>
+          <div><span class="lbl">Neigung</span><input type="text" id="pANeig" placeholder="z.B. 35°"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">Tag der Inbetriebnahme</span><input type="date" id="pAInb"></div>
+          <div><span class="lbl">Installierte Leistung (kWp)</span><input type="number" step="0.01" id="pAKwp"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">Einspeise-Zähler Nr.</span><input type="text" id="pAZaehler"></div>
+          <div><span class="lbl">Zählerstand bei Übergabe</span><input type="text" id="pAZstand"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec">PV-Module</div>
+        <div class="r2">
+          <div><span class="lbl">Hersteller</span><input type="text" id="pModHer" list="dlModHer"></div>
+          <div><span class="lbl">Modultyp</span><input type="text" id="pModTyp" list="dlModTyp" onchange="autofillKomp('module')"></div>
+        </div>
+        <datalist id="dlModHer"></datalist><datalist id="dlModTyp"></datalist>
+        <div class="r2">
+          <div><span class="lbl">Modulleistung (Wp)</span><input type="number" id="pModWp"></div>
+          <div><span class="lbl">Modulanzahl</span><input type="number" id="pModAnz"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">Isc (A)</span><input type="number" step="0.01" id="pModIsc"></div>
+          <div><span class="lbl">Uoc (V)</span><input type="number" step="0.01" id="pModUoc"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">MPP-Strom (A)</span><input type="number" step="0.01" id="pModImpp"></div>
+          <div><span class="lbl">MPP-Spannung (V)</span><input type="number" step="0.01" id="pModUmpp"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec">Wechselrichter</div>
+        <div class="r2">
+          <div><span class="lbl">Hersteller</span><input type="text" id="pWrHer" list="dlWrHer"></div>
+          <div><span class="lbl">Typ</span><input type="text" id="pWrTyp" list="dlWrTyp" onchange="autofillKomp('wr')"></div>
+        </div>
+        <datalist id="dlWrHer"></datalist><datalist id="dlWrTyp"></datalist>
+        <div class="r2">
+          <div><span class="lbl">AC-Nennleistung (W)</span><input type="number" id="pWrW"></div>
+          <div><span class="lbl">Anzahl</span><input type="number" id="pWrAnz" value="1"></div>
+        </div>
+        <span class="lbl">Seriennummer(n)</span><input type="text" id="pWrSn" placeholder="SN1, SN2 ...">
+      </div>
+
+      <div class="card">
+        <div class="sec">Zählerschrank / Verteiler</div>
+        <div class="r2">
+          <div><span class="lbl">Hersteller</span><input type="text" id="pZskHer" list="dlZskHer"></div>
+          <div><span class="lbl">Typ</span><input type="text" id="pZskTyp" list="dlZskTyp" onchange="autofillKomp('zsk')"></div>
+        </div>
+        <datalist id="dlZskHer"></datalist><datalist id="dlZskTyp"></datalist>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="sec" style="margin:0">Strangmessungen (DC)</div>
+          <button class="btn inf" style="flex:0;font-size:12px;padding:5px 10px" onclick="addStringRow()">+ Strang</button>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">Uoc/Isc bei STC, Riso: Isolationswiderstand gegen Erde</div>
+        <div id="stringRows"></div>
+      </div>
+
+      <div class="card">
+        <div class="sec">Besichtigung DC-Seite (Anhang B)</div>
+        <div id="chkDC"></div>
+      </div>
+      <div class="card">
+        <div class="sec">AC-Seite / Kennzeichnung</div>
+        <div id="chkAC"></div>
+      </div>
+      <div class="card">
+        <div class="sec">Mechanische Installation</div>
+        <div id="chkMech"></div>
+      </div>
+
+      <div class="card">
+        <div class="sec">AC-Messwerte</div>
+        <div class="r2">
+          <div><span class="lbl">Netzform</span><select id="pNetz"><option>TN-C-S</option><option>TN-S</option><option>TN-C</option><option>TT</option><option>IT</option></select></div>
+          <div><span class="lbl">Netzbetreiber</span><input type="text" id="pNetzbetreiber" placeholder="z.B. MITNETZ"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">RCD Typ / IΔn (mA)</span><input type="text" id="pRcd" placeholder="z.B. Typ A / 30"></div>
+          <div><span class="lbl">RCD Auslösezeit (ms)</span><input type="text" id="pRcdMs"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">Schutzleiter-Durchgängigkeit (Ω)</span><input type="text" id="pSchutzl" placeholder="&lt; 1"></div>
+          <div><span class="lbl">Erdungswiderstand RE (Ω)</span><input type="text" id="pRe"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">Riso AC (MΩ)</span><input type="text" id="pRisoAc"></div>
+          <div><span class="lbl">Schleifenimpedanz Zs (Ω)</span><input type="text" id="pZs"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="sec" style="margin:0">Stückliste / Material</div>
+          <button class="btn inf" style="flex:0;font-size:12px;padding:5px 10px" onclick="addMatRow()">+ Position</button>
+        </div>
+        <div id="matRows"></div>
+        <datalist id="dlMaterial"></datalist>
+      </div>
+
+      <div class="card">
+        <div class="sec">Zusatzleistungen</div>
+        <textarea id="pZusatz" placeholder="z.B. Wallbox-Vorbereitung, zusätzliche Leerrohre..."></textarea>
+      </div>
+
+      <div class="card">
+        <div class="sec">Prüfergebnis</div>
+        <select id="pErgebnis" onchange="toggleMaengel()">
+          <option value="ohne">✓ Es wurden keine Mängel festgestellt</option>
+          <option value="mit">✗ Es wurden Mängel festgestellt</option>
+        </select>
+        <div id="maengelBlock" style="display:none">
+          <span class="lbl">Festgestellte Mängel</span>
+          <textarea id="pMaengel" placeholder="Mangel 1: ...&#10;Mangel 2: ..."></textarea>
+        </div>
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#444;margin-top:8px;cursor:pointer">
+          <input type="checkbox" id="pRegeln" style="width:auto;margin-top:2px">
+          <span>Die Photovoltaikanlage entspricht den anerkannten Regeln der Elektrotechnik</span>
+        </label>
+        <span class="lbl">Bemerkungen</span>
+        <textarea id="pBemerk"></textarea>
+      </div>
+
+      <div class="card">
+        <div class="sec">Foto-Dokumentation</div>
+        <div style="font-size:12px;color:#666" id="protFotoInfo">Keine Baustelle gewählt.</div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:#444;margin-top:8px;cursor:pointer">
+          <input type="checkbox" id="pFotosInPdf" checked style="width:auto">
+          <span>Fotos der Baustelle im PDF-Export anzeigen</span>
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="sec">Abnahme &amp; Unterschriften</div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">Mit Finger oder Stift direkt im Feld unterschreiben.</div>
+        <span class="lbl">Ort / Datum</span>
+        <input type="text" id="pOrtDatum" placeholder="Leipzig, 06.07.2026">
+        <span class="lbl">Unterschrift Betreiber / Kunde</span>
+        <div class="sig-wrap"><canvas id="sigKunde" class="sig-pad"></canvas>
+          <button class="btn dan sig-clear" onclick="clearSig('sigKunde')">✕</button></div>
+        <span class="lbl">Unterschrift Errichter / Prüfer</span>
+        <div class="sig-wrap"><canvas id="sigErrichter" class="sig-pad"></canvas>
+          <button class="btn dan sig-clear" onclick="clearSig('sigErrichter')">✕</button></div>
+        <div style="font-size:10px;color:#aaa;margin-top:6px">(Die Haftung des Unterzeichnenden ist auf die oben beschriebenen Arbeiten beschränkt.)</div>
+      </div>
+
+      <div class="brow" style="margin-top:4px">
+        <button class="btn pri" onclick="saveProtokoll()">✓ Protokoll speichern</button>
+      </div>
+      <div class="brow">
+        <button class="btn" onclick="saveProtokoll(true);protokollPDF(editingProtIdx)">📄 Protokoll-PDF</button>
+        <button class="btn" onclick="saveProtokoll(true);stuecklistePDF(editingProtIdx)">📄 Stückliste PDF</button>
+        <button class="btn" onclick="saveProtokoll(true);stuecklisteXLSX(editingProtIdx)">📊 Stückliste Excel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ARBEITGEBER -->
   <div class="tab" id="tab-ag">
     <div class="card">
@@ -469,6 +722,8 @@ var employees = [
 var entries = [];
 var fotos = [];
 var baustellen = []; // {name, adresse, lat, lng, dat}
+var protokolle = []; // Prüf-/Abnahmeprotokolle nach DIN EN 62446
+var komponentenDB = {module:[],wr:[],zsk:[],material:[]}; // wiederverwendbare Hersteller/Typen
 var firma = {name:'',str:'',plz:''};
 var currentUser = null;
 var currentMonth, currentYear;
@@ -589,6 +844,8 @@ function initApp(){
     document.getElementById('profilRolle').textContent='Admin';
     document.getElementById('profilAvt').textContent='AG';
     renderMASelect();renderAgFilterSelect();renderMAListe();renderFotoMASelect();renderGalFilterSelect();
+    document.getElementById('calendarSection').style.display='block';
+    loadCalendarEvents();
   } else {
     document.querySelectorAll('.agOnly').forEach(function(el){el.style.display='none';});
     document.getElementById('maSelectRow').style.display='none';
@@ -601,6 +858,7 @@ function initApp(){
     document.getElementById('profilRolle').textContent=ma.rolle;
     document.getElementById('profilAvt').textContent=getInitials(ma.vn,ma.nl);
     document.getElementById('calendarSection').style.display='block';
+    loadCalendarEvents();
     updateUrlaubKonto();
     getGPS();
   }
@@ -622,11 +880,12 @@ function getGPS(){
 
 // ============ TABS ============
 function gotoTab(id){
-  ['heute','eintrag','fotos','monat','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
+  ['heute','eintrag','fotos','monat','protokoll','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('active');});
   var tel=document.getElementById('tab-'+id);if(tel)tel.classList.add('active');
-  document.querySelectorAll('.nb').forEach(function(b){if(b.textContent.indexOf({heute:'Heute',eintrag:'Eintrag',fotos:'Fotos',monat:'Monat',ag:'Arbeitgeber',profil:'Profil'}[id]||'')>=0)b.classList.add('active');});
+  document.querySelectorAll('.nb').forEach(function(b){if(b.textContent.indexOf({heute:'Heute',eintrag:'Eintrag',fotos:'Fotos',monat:'Monat',protokoll:'Protokoll',ag:'Arbeitgeber',profil:'Profil'}[id]||'')>=0)b.classList.add('active');});
   if(id==='monat')renderMonth();
+  if(id==='protokoll'){renderProtokollListe();fillDatalists();}
   if(id==='fotos')renderGalerie();
   if(id==='profil')updateUrlaubKonto();
 }
@@ -896,7 +1155,7 @@ function loadCalendarEvents(){
   }
   var now=new Date();
   var timeMin=now.toISOString();
-  var timeMax=new Date(now.getFullYear(),now.getMonth(),now.getDate()+30).toISOString();
+  var timeMax=new Date(now.getFullYear(),now.getMonth(),now.getDate()+90).toISOString();
   var url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(CALENDAR_ID)+'/events'
     +'?key='+GOOGLE_MAPS_API_KEY
     +'&timeMin='+encodeURIComponent(timeMin)
@@ -912,7 +1171,7 @@ function loadCalendarEvents(){
     return res.json();
   }).then(function(data){
     var events=data.items||[];
-    if(!events.length){listEl.innerHTML='Keine Termine in den nächsten 30 Tagen.';return;}
+    if(!events.length){listEl.innerHTML='Keine Termine in den nächsten 90 Tagen im Kalender „Planung ANVOLT".';return;}
     listEl.innerHTML=events.map(function(e){
       var startRaw=e.start.dateTime||e.start.date;
       var start=new Date(startRaw);
@@ -925,7 +1184,13 @@ function loadCalendarEvents(){
         +'</div>';
     }).join('');
   }).catch(function(err){
-    listEl.innerHTML='⚠️ Fehler: '+err.message;
+    var m=err.message||'';
+    var hint='';
+    if(/blocked/i.test(m)&&/referer|referrer/i.test(m)){hint='<br><span style="color:#92400e">→ API-Key: Website-Einschränkung prüfen. In der Cloud Console muss <b>https://ehometech.github.io/*</b> erlaubt sein.</span>';}
+    else if(/blocked/i.test(m)){hint='<br><span style="color:#92400e">→ API-Key-Einschränkung: In der Cloud Console beim Key unter „API-Einschränkungen" die <b>Google Calendar API</b> zur Liste hinzufügen. Änderung kann bis zu 15 Min. dauern.</span>';}
+    else if(/not.?found|404/i.test(m)){hint='<br><span style="color:#92400e">→ Kalender ist nicht öffentlich. In Google Kalender: Einstellungen → „Planung ANVOLT" → Zugriffsberechtigungen → <b>„Für die Öffentlichkeit freigeben"</b> aktivieren.</span>';}
+    else if(/disabled|has not been used/i.test(m)){hint='<br><span style="color:#92400e">→ Die Google Calendar API ist im Projekt noch nicht aktiviert (Cloud Console → APIs & Dienste → Bibliothek).</span>';}
+    listEl.innerHTML='⚠️ Fehler: '+m+hint;
   });
 }
 
@@ -1143,7 +1408,7 @@ function storageWorks(){
 }
 function saveLocal(){
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,savedAt:new Date().toISOString()}));
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()}));
   }catch(err){}
 }
 function loadLocal(){
@@ -1158,6 +1423,8 @@ function loadLocal(){
     if(Array.isArray(data.baustellen))baustellen=data.baustellen;
     if(data.timers)timers=data.timers;
     if(data.firma)firma=data.firma;
+    if(Array.isArray(data.protokolle))protokolle=data.protokolle;
+    if(data.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],zsk:[],material:[]},data.komponentenDB);
   }catch(err){}
 }
 function saveData(){
@@ -1167,7 +1434,7 @@ function saveData(){
 }
 function pushToCloud(){
   if(firebaseReady && cloudSynced && docRef && !applyingSnapshot){
-    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,savedAt:new Date().toISOString()})
+    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()})
       .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);});
   }
 }
@@ -1182,6 +1449,7 @@ function refreshAll(){
     if(ap && document.activeElement!==ap){ap.value=firma.plz||'';}
     var cp=document.getElementById('currentPinDisplay');if(cp)cp.textContent=APP_PIN;
     renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
+    if(document.getElementById('protListView')&&document.getElementById('protListView').style.display!=='none')renderProtokollListe();
     if(isAG()){renderMAListe();renderAgFilterSelect();}
     else{updateUrlaubKonto();}
   }
@@ -1210,6 +1478,8 @@ function initFirebase(){
         if(Array.isArray(d.baustellen))baustellen=d.baustellen;
         if(d.timers)timers=d.timers;
         if(d.firma)firma=d.firma;
+        if(Array.isArray(d.protokolle))protokolle=d.protokolle;
+        if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],zsk:[],material:[]},d.komponentenDB);
         applyingSnapshot=false;
         cloudSynced=true;
         saveLocal();
@@ -1236,11 +1506,531 @@ if(!storageWorks()){
   if(sw){sw.style.display='block';sw.textContent='⚠️ Dieser Browser speichert keine Daten dauerhaft.';}
 }
 buildUserList();
+// ============ PRÜF- & ABNAHMEPROTOKOLL (DIN EN 62446) ============
+var editingProtIdx=-1;
+
+// Checklisten (korrigierte + ergänzte Fassung des DGS-Formulars)
+var CHK_DC=[
+ ['dc1','DC-System nach IEC 60364 / DIN VDE 0100-712 geplant, ausgewählt und errichtet'],
+ ['dc2','DC-Komponenten für Gleichstrombetrieb bemessen (höchstmögl. Strom & Spannung)'],
+ ['dc3','Schutz durch Klasse II oder gleichwertige Isolation auf der DC-Seite'],
+ ['dc4','Strang-, Generator- und DC-Hauptkabel: Erd-/Kurzschlussrisiko minimiert (Abs. 522.8.1)'],
+ ['dc5','Verdrahtung hält äußeren Einflüssen stand — Wind, Temperatur, Schnee (Abs. 522.8.3)'],
+ ['dc6','AC- und DC-Kabel getrennt verlegt'],
+ ['dc7','Strangkabel für höchsten Fehlerstrom ausgelegt bzw. Strang-Überstromschutz korrekt (Abs. 433)'],
+ ['dc8','DC-Lasttrennschalter vor dem Wechselrichter (Abs. 536.2.2)'],
+ ['dc9','Überspannungsschutz (SPD) DC-seitig installiert und korrekt angeschlossen'],
+ ['dc10','Wechselrichter mit einfacher Trennung AC/DC oder RCD Typ B installiert (Abs. 413.1.1.1.2)'],
+ ['dc11','Fläche von Verdrahtungsschleifen möglichst gering gehalten (Abs. 54)'],
+ ['dc12','Potentialausgleich Untergestell vorhanden; Leiter parallel & eng an DC-Kabeln geführt']
+];
+var CHK_AC=[
+ ['ac1','AC-seitige Trennvorrichtung des Wechselrichters montiert und korrekt angeschlossen (Abs. 536.2.2.1)'],
+ ['ac2','Schutz-/Einstellungen des WR gemäß örtlichen Bestimmungen (cos φ, Einspeisemanagement)'],
+ ['ac3','Einrichtung zur Leistungsreduktion nach Vorgaben des Netzbetreibers installiert'],
+ ['ac4','Beschriftung aller Stromkreise, Schutzeinrichtungen, Schalter und Anschlussklemmen'],
+ ['ac5','Warnhinweise an PV-Anschlusskästen (nach Abschalten weiterhin spannungsführend)'],
+ ['ac6','AC-Haupttrennschalter gekennzeichnet; Feuerwehrschild (IEC 60364-7-712) am Übergabepunkt'],
+ ['ac7','Warnhinweis Doppelversorgung am Punkt der Zusammenschaltung vorhanden'],
+ ['ac8','Prinzipschaltplan und Verfahren zur Notabschaltung vor Ort vorhanden'],
+ ['ac9','Zeichen und Aufschriften dauerhaft und geeignet befestigt']
+];
+var CHK_MECH=[
+ ['me1','PV-Generator ausreichend hinterlüftet (Modultemperatur / Brandrisiko)'],
+ ['me2','Generator aus korrosionsbeständigen und verträglichen Materialien aufgebaut'],
+ ['me3','Alle Komponenten ordnungsgemäß und dauerhaft befestigt'],
+ ['me4','Kabelführung dauerhaft erd- und kurzschlusssicher (Biegeradien beachtet)']
+];
+
+function renderChecklists(checked){
+  checked=checked||{};
+  function block(list,elId){
+    var el=document.getElementById(elId);if(!el)return;
+    el.innerHTML=list.map(function(c){
+      return '<label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#444;padding:5px 0;border-bottom:1px solid #f5f5f5;cursor:pointer">'
+        +'<input type="checkbox" class="pchk" data-k="'+c[0]+'" '+(checked[c[0]]?'checked':'')+' style="width:auto;margin-top:2px;flex-shrink:0">'
+        +'<span>'+c[1]+'</span></label>';
+    }).join('');
+  }
+  block(CHK_DC,'chkDC');block(CHK_AC,'chkAC');block(CHK_MECH,'chkMech');
+}
+function collectChecks(){
+  var o={};document.querySelectorAll('.pchk').forEach(function(cb){o[cb.dataset.k]=cb.checked;});return o;
+}
+
+// ---- Strang-Zeilen (dynamisch, beliebig viele) ----
+function addStringRow(d){
+  d=d||{};
+  var wrap=document.getElementById('stringRows');
+  var n=wrap.children.length+1;
+  var div=document.createElement('div');
+  div.className='string-row';
+  div.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+    +'<span style="font-size:12px;font-weight:600">Strang '+n+'</span>'
+    +'<button class="btn dan" style="flex:0;padding:3px 8px;font-size:11px" onclick="this.closest(\'.string-row\').remove();renumberStrings()">✕</button></div>'
+    +'<div class="r2"><div><span class="lbl">Modulanzahl</span><input type="number" class="s-anz" value="'+(d.anz||'')+'"></div>'
+    +'<div><span class="lbl">Polarität i.O.</span><select class="s-pol"><option value="ja"'+(d.pol!=='nein'?' selected':'')+'>ja</option><option value="nein"'+(d.pol==='nein'?' selected':'')+'>nein</option></select></div></div>'
+    +'<div class="r2"><div><span class="lbl">Uoc (V)</span><input type="text" class="s-uoc" value="'+(d.uoc||'')+'"></div>'
+    +'<div><span class="lbl">Isc (A)</span><input type="text" class="s-isc" value="'+(d.isc||'')+'"></div></div>'
+    +'<div class="r2"><div><span class="lbl">Riso (MΩ)</span><input type="text" class="s-riso" value="'+(d.riso||'')+'"></div>'
+    +'<div><span class="lbl">Erdung (Ω)</span><input type="text" class="s-erd" value="'+(d.erd||'')+'"></div></div>';
+  wrap.appendChild(div);
+}
+function renumberStrings(){
+  document.querySelectorAll('#stringRows .string-row').forEach(function(r,i){
+    r.querySelector('span').textContent='Strang '+(i+1);
+  });
+}
+function collectStrings(){
+  var out=[];
+  document.querySelectorAll('#stringRows .string-row').forEach(function(r){
+    out.push({anz:r.querySelector('.s-anz').value,pol:r.querySelector('.s-pol').value,
+      uoc:r.querySelector('.s-uoc').value,isc:r.querySelector('.s-isc').value,
+      riso:r.querySelector('.s-riso').value,erd:r.querySelector('.s-erd').value});
+  });
+  return out;
+}
+
+// ---- Stücklisten-Zeilen ----
+function addMatRow(d){
+  d=d||{};
+  var wrap=document.getElementById('matRows');
+  var div=document.createElement('div');
+  div.className='mat-row';
+  div.innerHTML='<input type="number" class="m-menge" placeholder="Anz." value="'+(d.menge||'')+'" style="width:52px;flex-shrink:0">'
+    +'<select class="m-einheit" style="width:64px;flex-shrink:0">'
+    +['Stk','m','Set','Pkg','Rolle','kg'].map(function(u){return '<option'+(d.einheit===u?' selected':'')+'>'+u+'</option>';}).join('')
+    +'</select>'
+    +'<input type="text" class="m-bez" list="dlMaterial" placeholder="Bezeichnung" value="'+(d.bez||'').replace(/"/g,'&quot;')+'" style="flex:1;min-width:0">'
+    +'<button class="btn dan" style="flex:0;padding:5px 8px;font-size:11px" onclick="this.closest(\'.mat-row\').remove()">✕</button>';
+  wrap.appendChild(div);
+}
+function collectMaterial(){
+  var out=[];
+  document.querySelectorAll('#matRows .mat-row').forEach(function(r){
+    var bez=r.querySelector('.m-bez').value.trim();
+    if(!bez)return;
+    out.push({menge:r.querySelector('.m-menge').value||'',einheit:r.querySelector('.m-einheit').value,bez:bez});
+  });
+  return out;
+}
+
+// ---- Komponenten-DB (Autocomplete + Autofill) ----
+function fillDatalists(){
+  function fill(id,arr){var dl=document.getElementById(id);if(dl)dl.innerHTML=arr.map(function(v){return '<option value="'+String(v).replace(/"/g,'&quot;')+'">';}).join('');}
+  function uniq(a){return a.filter(function(v,i){return v&&a.indexOf(v)===i;});}
+  fill('dlModHer',uniq(komponentenDB.module.map(function(k){return k.hersteller;})));
+  fill('dlModTyp',uniq(komponentenDB.module.map(function(k){return k.typ;})));
+  fill('dlWrHer',uniq(komponentenDB.wr.map(function(k){return k.hersteller;})));
+  fill('dlWrTyp',uniq(komponentenDB.wr.map(function(k){return k.typ;})));
+  fill('dlZskHer',uniq(komponentenDB.zsk.map(function(k){return k.hersteller;})));
+  fill('dlZskTyp',uniq(komponentenDB.zsk.map(function(k){return k.typ;})));
+  fill('dlMaterial',uniq(komponentenDB.material.map(function(m){return m.bez;})));
+  var bs=uniq(baustellen.map(function(b){return b.name;}).concat(fotos.map(function(f){return f.baustelle;})).concat(protokolle.map(function(p){return p.baustelle;})));
+  fill('dlProtBaustellen',bs);
+}
+function autofillKomp(art){
+  var typEl={module:'pModTyp',wr:'pWrTyp',zsk:'pZskTyp'}[art];
+  var typ=document.getElementById(typEl).value.trim();
+  var rec=komponentenDB[art].filter(function(k){return k.typ===typ;})[0];
+  if(!rec)return;
+  if(art==='module'){
+    document.getElementById('pModHer').value=rec.hersteller||'';
+    if(rec.wp)document.getElementById('pModWp').value=rec.wp;
+    if(rec.isc)document.getElementById('pModIsc').value=rec.isc;
+    if(rec.uoc)document.getElementById('pModUoc').value=rec.uoc;
+    if(rec.impp)document.getElementById('pModImpp').value=rec.impp;
+    if(rec.umpp)document.getElementById('pModUmpp').value=rec.umpp;
+  }else if(art==='wr'){
+    document.getElementById('pWrHer').value=rec.hersteller||'';
+    if(rec.w)document.getElementById('pWrW').value=rec.w;
+  }else{
+    document.getElementById('pZskHer').value=rec.hersteller||'';
+  }
+}
+function upsertKomponenten(p){
+  function up(arr,rec){
+    if(!rec.typ&&!rec.hersteller)return;
+    var i=arr.findIndex(function(k){return k.typ===rec.typ&&k.hersteller===rec.hersteller;});
+    if(i>=0)arr[i]=Object.assign({},arr[i],rec);else arr.push(rec);
+  }
+  up(komponentenDB.module,{hersteller:p.mod.her,typ:p.mod.typ,wp:p.mod.wp,isc:p.mod.isc,uoc:p.mod.uoc,impp:p.mod.impp,umpp:p.mod.umpp});
+  up(komponentenDB.wr,{hersteller:p.wr.her,typ:p.wr.typ,w:p.wr.w});
+  up(komponentenDB.zsk,{hersteller:p.zsk.her,typ:p.zsk.typ});
+  (p.material||[]).forEach(function(m){
+    if(!komponentenDB.material.some(function(x){return x.bez===m.bez;}))komponentenDB.material.push({bez:m.bez,einheit:m.einheit});
+  });
+}
+
+// ---- Unterschrift-Pads ----
+var sigPads={};
+function initSigPad(id){
+  var c=document.getElementById(id);if(!c)return;
+  var w=c.parentElement.clientWidth||340;
+  c.width=w;c.height=140;
+  var ctx=c.getContext('2d');
+  if(!ctx)return;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+  ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';
+  var drawing=false,last=null,dirty=false;
+  function pos(e){var r=c.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
+  c.addEventListener('pointerdown',function(e){e.preventDefault();drawing=true;last=pos(e);c.setPointerCapture(e.pointerId);});
+  c.addEventListener('pointermove',function(e){if(!drawing)return;e.preventDefault();var p=pos(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;dirty=true;sigPads[id].dirty=true;});
+  ['pointerup','pointercancel','pointerleave'].forEach(function(ev){c.addEventListener(ev,function(){drawing=false;});});
+  c.style.touchAction='none';
+  sigPads[id]={canvas:c,ctx:ctx,dirty:false};
+}
+function clearSig(id){
+  var s=sigPads[id];if(!s)return;
+  s.ctx.fillStyle='#fff';s.ctx.fillRect(0,0,s.canvas.width,s.canvas.height);s.dirty=false;
+}
+function sigDataURL(id){
+  var s=sigPads[id];
+  if(!s||!s.dirty)return '';
+  return s.canvas.toDataURL('image/jpeg',0.6);
+}
+function loadSig(id,dataURL){
+  var s=sigPads[id];if(!s||!dataURL)return;
+  var img=new Image();
+  img.onload=function(){s.ctx.drawImage(img,0,0,s.canvas.width,s.canvas.height);s.dirty=true;};
+  img.src=dataURL;
+}
+
+// ---- Liste / Formular ----
+function renderProtokollListe(){
+  var el=document.getElementById('protListe');if(!el)return;
+  document.getElementById('protCount').textContent=protokolle.length;
+  document.getElementById('dbCountMod').textContent=komponentenDB.module.length;
+  document.getElementById('dbCountWr').textContent=komponentenDB.wr.length;
+  document.getElementById('dbCountZsk').textContent=komponentenDB.zsk.length;
+  document.getElementById('dbCountMat').textContent=komponentenDB.material.length;
+  if(!protokolle.length){el.innerHTML='<div style="color:#888;font-size:13px;padding:16px 0;text-align:center">Noch keine Protokolle.<br>Tippe auf „+ Neues Protokoll".</div>';return;}
+  el.innerHTML=protokolle.map(function(p,i){
+    var sig=(p.sigKunde&&p.sigErrichter)?'<span class="bdg g">✓ unterschrieben</span>':'<span class="bdg a">Unterschrift offen</span>';
+    var erg=p.ergebnis==='mit'?'<span class="bdg r">Mängel</span>':'<span class="bdg g">o. Mängel</span>';
+    return '<div class="ent" style="cursor:pointer" onclick="editProtokoll('+i+')">'
+      +'<div class="edot" style="background:'+(p.ergebnis==='mit'?'#dc2626':'#16a34a')+'"></div>'
+      +'<div class="einfo"><div class="etitle">'+(p.nr?p.nr+' · ':'')+(p.baustelle||p.kunde.name||'Protokoll')+'</div>'
+      +'<div class="esub">'+(p.datum||'')+' · '+(p.kunde.name||'')+'</div>'
+      +'<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">'+erg+sig+'</div></div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px">'
+      +'<button class="btn" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();protokollPDF('+i+')">📄 PDF</button>'
+      +'<button class="btn dan" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();deleteProtokoll('+i+')">🗑</button>'
+      +'</div></div>';
+  }).join('');
+}
+function newProtokoll(){
+  editingProtIdx=-1;
+  openProtokollForm(null);
+}
+function editProtokoll(i){
+  editingProtIdx=i;
+  openProtokollForm(protokolle[i]);
+}
+function deleteProtokoll(i){
+  if(!confirm('Protokoll „'+(protokolle[i].nr||protokolle[i].baustelle||'')+'" löschen?'))return;
+  protokolle.splice(i,1);saveData();renderProtokollListe();
+}
+function openProtokollForm(p){
+  document.getElementById('protListView').style.display='none';
+  document.getElementById('protFormView').style.display='block';
+  document.getElementById('protFormTitle').textContent=p?'Protokoll bearbeiten':'Neues Protokoll';
+  fillDatalists();
+  document.getElementById('stringRows').innerHTML='';
+  document.getElementById('matRows').innerHTML='';
+  var set=function(id,v){var e=document.getElementById(id);if(e)e.value=v==null?'':v;};
+  if(p){
+    set('pNr',p.nr);set('pDatum',p.datum);set('pArt',p.art||'erst');set('pBaustelle',p.baustelle);
+    set('pNextDatum',p.nextDatum);set('pGeraete',p.geraete);
+    set('pKName',p.kunde.name);set('pKStr',p.kunde.str);set('pKPlz',p.kunde.plz);set('pKTel',p.kunde.tel);set('pKMail',p.kunde.mail);
+    set('pEName',p.errichter.name);set('pEStr',p.errichter.str);set('pEPlz',p.errichter.plz);set('pETel',p.errichter.tel);set('pEMail',p.errichter.mail);
+    set('pAStandort',p.anlage.standort);set('pAAusr',p.anlage.ausr);set('pANeig',p.anlage.neig);
+    set('pAInb',p.anlage.inb);set('pAKwp',p.anlage.kwp);set('pAZaehler',p.anlage.zaehler);set('pAZstand',p.anlage.zstand);
+    set('pModHer',p.mod.her);set('pModTyp',p.mod.typ);set('pModWp',p.mod.wp);set('pModAnz',p.mod.anz);
+    set('pModIsc',p.mod.isc);set('pModUoc',p.mod.uoc);set('pModImpp',p.mod.impp);set('pModUmpp',p.mod.umpp);
+    set('pWrHer',p.wr.her);set('pWrTyp',p.wr.typ);set('pWrW',p.wr.w);set('pWrAnz',p.wr.anz);set('pWrSn',p.wr.sn);
+    set('pZskHer',p.zsk.her);set('pZskTyp',p.zsk.typ);
+    set('pNetz',p.ac.netz||'TN-C-S');set('pNetzbetreiber',p.ac.betreiber);set('pRcd',p.ac.rcd);set('pRcdMs',p.ac.rcdMs);
+    set('pSchutzl',p.ac.schutzl);set('pRe',p.ac.re);set('pRisoAc',p.ac.riso);set('pZs',p.ac.zs);
+    set('pZusatz',p.zusatz);set('pErgebnis',p.ergebnis||'ohne');set('pMaengel',p.maengel);set('pBemerk',p.bemerk);
+    set('pOrtDatum',p.ortDatum);
+    document.getElementById('pRegeln').checked=!!p.regeln;
+    document.getElementById('pFotosInPdf').checked=p.fotosInPdf!==false;
+    (p.strings&&p.strings.length?p.strings:[{}]).forEach(function(s){addStringRow(s);});
+    (p.material||[]).forEach(function(m){addMatRow(m);});
+    renderChecklists(p.checks||{});
+  }else{
+    ['pNr','pBaustelle','pNextDatum','pGeraete','pKName','pKStr','pKPlz','pKTel','pKMail',
+     'pAStandort','pAAusr','pANeig','pAInb','pAZaehler','pAZstand','pAKwp',
+     'pModHer','pModTyp','pModWp','pModAnz','pModIsc','pModUoc','pModImpp','pModUmpp',
+     'pWrHer','pWrTyp','pWrW','pWrSn','pZskHer','pZskTyp',
+     'pNetzbetreiber','pRcd','pRcdMs','pSchutzl','pRe','pRisoAc','pZs',
+     'pZusatz','pMaengel','pBemerk'].forEach(function(id){set(id,'');});
+    set('pDatum',todayStr());set('pArt','erst');set('pWrAnz',1);set('pErgebnis','ohne');set('pNetz','TN-C-S');
+    document.getElementById('pRegeln').checked=false;
+    document.getElementById('pFotosInPdf').checked=true;
+    // Errichter aus Firmendaten vorbelegen
+    set('pEName',firma.name||'');set('pEStr',firma.str||'');set('pEPlz',firma.plz||'');set('pETel','');set('pEMail','');
+    var d=new Date();
+    set('pOrtDatum',(firma.plz?firma.plz.replace(/^[0-9 ]+/,'').trim():'')+(firma.plz?', ':'')+pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear());
+    addStringRow();
+    renderChecklists({});
+  }
+  toggleMaengel();
+  protFotoCount();
+  setTimeout(function(){
+    initSigPad('sigKunde');initSigPad('sigErrichter');
+    if(p){loadSig('sigKunde',p.sigKunde);loadSig('sigErrichter',p.sigErrichter);}
+  },60);
+  window.scrollTo(0,0);
+}
+function closeProtokollForm(){
+  document.getElementById('protFormView').style.display='none';
+  document.getElementById('protListView').style.display='block';
+  renderProtokollListe();
+}
+function toggleMaengel(){
+  document.getElementById('maengelBlock').style.display=document.getElementById('pErgebnis').value==='mit'?'block':'none';
+}
+function protFotos(baustelle){
+  if(!baustelle)return [];
+  return fotos.filter(function(f){return (f.baustelle||'').toLowerCase()===baustelle.toLowerCase();});
+}
+function protFotoCount(){
+  var b=document.getElementById('pBaustelle').value.trim();
+  var n=protFotos(b).length;
+  document.getElementById('protFotoInfo').textContent=b?(n+' Foto(s) zur Baustelle „'+b+'" gefunden — werden im PDF angezeigt.'):'Keine Baustelle gewählt.';
+}
+function saveProtokoll(silent){
+  var g=function(id){var e=document.getElementById(id);return e?e.value.trim():'';};
+  var p={
+    id:(editingProtIdx>=0&&protokolle[editingProtIdx].id)?protokolle[editingProtIdx].id:Date.now(),
+    nr:g('pNr'),datum:g('pDatum'),art:g('pArt'),baustelle:g('pBaustelle'),
+    nextDatum:g('pNextDatum'),geraete:g('pGeraete'),
+    kunde:{name:g('pKName'),str:g('pKStr'),plz:g('pKPlz'),tel:g('pKTel'),mail:g('pKMail')},
+    errichter:{name:g('pEName'),str:g('pEStr'),plz:g('pEPlz'),tel:g('pETel'),mail:g('pEMail')},
+    anlage:{standort:g('pAStandort'),ausr:g('pAAusr'),neig:g('pANeig'),inb:g('pAInb'),kwp:g('pAKwp'),zaehler:g('pAZaehler'),zstand:g('pAZstand')},
+    mod:{her:g('pModHer'),typ:g('pModTyp'),wp:g('pModWp'),anz:g('pModAnz'),isc:g('pModIsc'),uoc:g('pModUoc'),impp:g('pModImpp'),umpp:g('pModUmpp')},
+    wr:{her:g('pWrHer'),typ:g('pWrTyp'),w:g('pWrW'),anz:g('pWrAnz'),sn:g('pWrSn')},
+    zsk:{her:g('pZskHer'),typ:g('pZskTyp')},
+    strings:collectStrings(),
+    checks:collectChecks(),
+    ac:{netz:g('pNetz'),betreiber:g('pNetzbetreiber'),rcd:g('pRcd'),rcdMs:g('pRcdMs'),schutzl:g('pSchutzl'),re:g('pRe'),riso:g('pRisoAc'),zs:g('pZs')},
+    material:collectMaterial(),
+    zusatz:g('pZusatz'),
+    ergebnis:g('pErgebnis'),maengel:g('pMaengel'),bemerk:g('pBemerk'),
+    regeln:document.getElementById('pRegeln').checked,
+    fotosInPdf:document.getElementById('pFotosInPdf').checked,
+    ortDatum:g('pOrtDatum'),
+    sigKunde:sigDataURL('sigKunde')||((editingProtIdx>=0&&protokolle[editingProtIdx].sigKunde)||''),
+    sigErrichter:sigDataURL('sigErrichter')||((editingProtIdx>=0&&protokolle[editingProtIdx].sigErrichter)||'')
+  };
+  if(!p.kunde.name&&!p.baustelle){alert('Bitte mindestens Kunde oder Baustelle angeben.');return;}
+  if(editingProtIdx>=0)protokolle[editingProtIdx]=p;
+  else{protokolle.unshift(p);editingProtIdx=0;}
+  upsertKomponenten(p);
+  saveData();
+  fillDatalists();
+  if(!silent){alert('Protokoll gespeichert!');closeProtokollForm();}
+}
+
+// ---- Bild als DataURL laden (für PDF, Cloudinary erlaubt CORS) ----
+function imgToDataURL(url,maxW){
+  return new Promise(function(res){
+    var img=new Image();
+    img.crossOrigin='anonymous';
+    img.onload=function(){
+      var w=Math.min(maxW||500,img.width);
+      var h=Math.round(img.height*w/img.width);
+      var c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      try{res({data:c.toDataURL('image/jpeg',0.7),w:w,h:h});}catch(e){res(null);}
+    };
+    img.onerror=function(){res(null);};
+    img.src=url;
+  });
+}
+
+// ---- PROTOKOLL-PDF (mehrseitig, mit Fotos + beidseitiger Unterschrift) ----
+function protokollPDF(idx){
+  var p=protokolle[idx];
+  if(!p){alert('Protokoll zuerst speichern.');return;}
+  if(!(window.jspdf&&window.jspdf.jsPDF)){alert('PDF-Bibliothek nicht geladen. Bitte Internetverbindung prüfen.');return;}
+  var pf=p.fotosInPdf!==false?protFotos(p.baustelle):[];
+  var loads=pf.slice(0,12).map(function(f){return imgToDataURL(f.url,500);});
+  Promise.all(loads).then(function(imgs){
+    buildProtokollPDF(p,pf,imgs);
+  });
+}
+function buildProtokollPDF(p,pf,imgs){
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({unit:'mm',format:'a4'});
+  var M=14,PW=210,PH=297,y=16;
+  function nl(need){if(y+need>PH-16){doc.addPage();y=16;}}
+  function h1(t){doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(17,17,17);doc.text(t,M,y);y+=6;}
+  function h2(t){nl(10);doc.setFillColor(31,41,55);doc.rect(M,y-4,PW-2*M,6,'F');doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(255,255,255);doc.text(t,M+2,y);y+=6;}
+  function kv(rows){
+    doc.autoTable({startY:y,body:rows,theme:'plain',
+      styles:{font:'helvetica',fontSize:8.5,cellPadding:1.1,textColor:[40,40,40]},
+      columnStyles:{0:{fontStyle:'bold',cellWidth:52,textColor:[100,100,100]}},margin:{left:M,right:M}});
+    y=doc.lastAutoTable.finalY+3;
+  }
+  // Kopf
+  h1('Prüf- und Abnahmeprotokoll — Photovoltaik-Anlage');
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(120,120,120);
+  doc.text('gemäß DIN EN 62446 (VDE 0126-23)  ·  Prüfbericht Nr. '+(p.nr||'—')+'  ·  '+(p.art==='wieder'?'Wiederholungsprüfung':'Erstprüfung'),M,y);
+  doc.text('Erstellt am '+new Date().toLocaleDateString('de-DE'),PW-M,y,{align:'right'});
+  y+=6;
+  h2('Betreiber (Kunde) / Errichter');
+  kv([
+    ['Betreiber',(p.kunde.name||'')+(p.kunde.str?', '+p.kunde.str:'')+(p.kunde.plz?', '+p.kunde.plz:'')+(p.kunde.tel?' · '+p.kunde.tel:'')+(p.kunde.mail?' · '+p.kunde.mail:'')],
+    ['Errichter',(p.errichter.name||'')+(p.errichter.str?', '+p.errichter.str:'')+(p.errichter.plz?', '+p.errichter.plz:'')+(p.errichter.tel?' · '+p.errichter.tel:'')+(p.errichter.mail?' · '+p.errichter.mail:'')],
+    ['Baustelle / Standort',(p.baustelle||'')+(p.anlage.standort?' — '+p.anlage.standort:'')],
+    ['Datum der Prüfung',fmtDateDE(p.datum)+(p.nextDatum?'   ·   Nächster Prüftermin: '+fmtDateDE(p.nextDatum):'')],
+    ['Prüfgeräte',p.geraete||'—']
+  ]);
+  h2('Anlage / Inbetriebnahme');
+  kv([
+    ['Inbetriebnahme',fmtDateDE(p.anlage.inb)||'—'],
+    ['Installierte Leistung',(p.anlage.kwp?p.anlage.kwp+' kWp':'—')+(p.anlage.ausr?'   ·   Ausrichtung: '+p.anlage.ausr:'')+(p.anlage.neig?'   ·   Neigung: '+p.anlage.neig:'')],
+    ['Einspeise-Zähler','Nr. '+(p.anlage.zaehler||'—')+(p.anlage.zstand?'   ·   Zählerstand bei Übergabe: '+p.anlage.zstand:'')]
+  ]);
+  h2('Komponenten');
+  kv([
+    ['PV-Module',(p.mod.her||'')+' '+(p.mod.typ||'')+(p.mod.wp?' · '+p.mod.wp+' Wp':'')+(p.mod.anz?' · '+p.mod.anz+' Stk':'')+(p.mod.uoc?' · Uoc '+p.mod.uoc+' V':'')+(p.mod.isc?' · Isc '+p.mod.isc+' A':'')+(p.mod.umpp?' · Umpp '+p.mod.umpp+' V':'')+(p.mod.impp?' · Impp '+p.mod.impp+' A':'')],
+    ['Wechselrichter',(p.wr.her||'')+' '+(p.wr.typ||'')+(p.wr.w?' · '+p.wr.w+' W':'')+(p.wr.anz?' · '+p.wr.anz+' Stk':'')+(p.wr.sn?' · SN: '+p.wr.sn:'')],
+    ['Zählerschrank',(p.zsk.her||'')+' '+(p.zsk.typ||'')||'—']
+  ]);
+  // Strangmessungen
+  if(p.strings&&p.strings.length){
+    h2('Strangmessungen (DC)');
+    doc.autoTable({startY:y,
+      head:[['Strang','Module','Polarität','Uoc (V)','Isc (A)','Riso (MΩ)','Erdung (Ω)']],
+      body:p.strings.map(function(s,i){return [i+1,s.anz||'-',s.pol==='nein'?'n.i.O.':'i.O.',s.uoc||'-',s.isc||'-',s.riso||'-',s.erd||'-'];}),
+      theme:'grid',styles:{font:'helvetica',fontSize:8,cellPadding:1.5,halign:'center'},
+      headStyles:{fillColor:[240,240,240],textColor:[40,40,40],fontStyle:'bold'},margin:{left:M,right:M}});
+    y=doc.lastAutoTable.finalY+3;
+  }
+  // Checklisten
+  function chkTable(title,list){
+    nl(14);h2(title);
+    doc.autoTable({startY:y,
+      body:list.map(function(c){return [(p.checks&&p.checks[c[0]])?'[x]':'[  ]',c[1]];}),
+      theme:'plain',styles:{font:'helvetica',fontSize:7.5,cellPadding:1},
+      columnStyles:{0:{cellWidth:8,fontStyle:'bold'}},margin:{left:M,right:M}});
+    y=doc.lastAutoTable.finalY+2;
+  }
+  chkTable('Besichtigung DC-Seite (Anhang B)',CHK_DC);
+  chkTable('AC-Seite / Kennzeichnung',CHK_AC);
+  chkTable('Mechanische Installation',CHK_MECH);
+  // AC-Messwerte
+  nl(30);h2('AC-Messwerte');
+  kv([
+    ['Netzform / Netzbetreiber',(p.ac.netz||'—')+(p.ac.betreiber?' · '+p.ac.betreiber:'')],
+    ['RCD',(p.ac.rcd||'—')+(p.ac.rcdMs?' · Auslösezeit '+p.ac.rcdMs+' ms':'')],
+    ['Schutzleiter / Erdung','Durchgängigkeit '+(p.ac.schutzl||'—')+' Ω · RE '+(p.ac.re||'—')+' Ω'],
+    ['Riso AC / Zs',(p.ac.riso||'—')+' MΩ · Zs '+(p.ac.zs||'—')+' Ω']
+  ]);
+  // Stückliste
+  if(p.material&&p.material.length){
+    nl(20);h2('Stückliste / verbautes Material');
+    doc.autoTable({startY:y,head:[['Pos.','Menge','Einheit','Bezeichnung']],
+      body:p.material.map(function(m,i){return [i+1,m.menge,m.einheit,m.bez];}),
+      theme:'grid',styles:{font:'helvetica',fontSize:8,cellPadding:1.5},
+      headStyles:{fillColor:[31,41,55],textColor:[255,255,255],fontStyle:'bold'},
+      columnStyles:{0:{cellWidth:12,halign:'center'},1:{cellWidth:16,halign:'center'},2:{cellWidth:18,halign:'center'}},
+      margin:{left:M,right:M}});
+    y=doc.lastAutoTable.finalY+3;
+  }
+  // Zusatzleistungen / Ergebnis
+  if(p.zusatz){nl(16);h2('Zusatzleistungen');doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(40,40,40);
+    var zl=doc.splitTextToSize(p.zusatz,PW-2*M);doc.text(zl,M,y);y+=zl.length*4+3;}
+  nl(24);h2('Prüfergebnis');
+  doc.setFont('helvetica','bold');doc.setFontSize(9.5);
+  if(p.ergebnis==='mit'){doc.setTextColor(185,28,28);doc.text('[x] Es wurden Mängel festgestellt',M,y);}
+  else{doc.setTextColor(22,101,52);doc.text('[x] Es wurden keine Mängel festgestellt',M,y);}
+  y+=5;
+  doc.setTextColor(40,40,40);doc.setFont('helvetica','normal');doc.setFontSize(8.5);
+  doc.text((p.regeln?'[x]':'[  ]')+' Die Photovoltaikanlage entspricht den anerkannten Regeln der Elektrotechnik',M,y);y+=5;
+  if(p.ergebnis==='mit'&&p.maengel){var ml=doc.splitTextToSize('Mängel: '+p.maengel,PW-2*M);doc.text(ml,M,y);y+=ml.length*4+2;}
+  if(p.bemerk){var bl=doc.splitTextToSize('Bemerkungen: '+p.bemerk,PW-2*M);doc.text(bl,M,y);y+=bl.length*4+2;}
+  // Fotos
+  var okImgs=imgs?imgs.filter(function(x){return !!x;}):[];
+  if(okImgs.length){
+    nl(20);h2('Foto-Dokumentation ('+okImgs.length+' Fotos · Baustelle '+(p.baustelle||'')+')');
+    var iw=(PW-2*M-6)/2;
+    for(var i=0;i<okImgs.length;i+=2){
+      var ih1=okImgs[i].h*iw/okImgs[i].w;
+      var ih2=okImgs[i+1]?okImgs[i+1].h*iw/okImgs[i+1].w:0;
+      var rowH=Math.min(70,Math.max(ih1,ih2));
+      nl(rowH+10);
+      try{doc.addImage(okImgs[i].data,'JPEG',M,y,iw,Math.min(70,ih1));}catch(e){}
+      doc.setFontSize(7);doc.setTextColor(120,120,120);
+      doc.text((pf[i].datum||'')+' '+(pf[i].zeit||'')+(pf[i].notiz?' · '+pf[i].notiz.substring(0,60):''),M,y+Math.min(70,ih1)+3);
+      if(okImgs[i+1]){
+        try{doc.addImage(okImgs[i+1].data,'JPEG',M+iw+6,y,iw,Math.min(70,ih2));}catch(e){}
+        doc.text((pf[i+1].datum||'')+' '+(pf[i+1].zeit||'')+(pf[i+1].notiz?' · '+pf[i+1].notiz.substring(0,60):''),M+iw+6,y+Math.min(70,ih2)+3);
+      }
+      y+=rowH+8;
+    }
+  }
+  // Abnahme + beidseitige Unterschrift
+  nl(52);
+  h2('Abnahme');
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(40,40,40);
+  var abnT=doc.splitTextToSize('Der Betreiber bestätigt mit seiner Unterschrift die Abnahme der oben beschriebenen Anlage'+(p.ergebnis==='mit'?' unter Vorbehalt der aufgeführten Mängel':'')+'. Der Errichter bestätigt, dass die Arbeiten nach bestem Wissen und den anerkannten Regeln der Technik ausgeführt wurden. (Die Haftung des Unterzeichnenden ist auf die oben beschriebenen Arbeiten beschränkt.)',PW-2*M);
+  doc.text(abnT,M,y);y+=abnT.length*3.6+4;
+  doc.text('Ort / Datum: '+(p.ortDatum||''),M,y);y+=4;
+  var sw=72,sh=22;
+  if(p.sigKunde){try{doc.addImage(p.sigKunde,'JPEG',M,y,sw,sh);}catch(e){}}
+  if(p.sigErrichter){try{doc.addImage(p.sigErrichter,'JPEG',PW-M-sw,y,sw,sh);}catch(e){}}
+  y+=sh+2;
+  doc.setDrawColor(120,120,120);doc.setLineWidth(0.2);
+  doc.line(M,y,M+sw,y);doc.line(PW-M-sw,y,PW-M,y);
+  doc.setFontSize(7.5);doc.setTextColor(110,110,110);
+  doc.text('Unterschrift Betreiber / Kunde',M,y+4);
+  doc.text('Unterschrift Errichter / Prüfer',PW-M-sw,y+4);
+  doc.save('Pruefprotokoll_'+(p.nr||p.baustelle||'PV').replace(/[^\w-]+/g,'_')+'.pdf');
+}
+
+// ---- STÜCKLISTE separat: PDF + Excel ----
+function stuecklistePDF(idx){
+  var p=protokolle[idx];
+  if(!p||!p.material||!p.material.length){alert('Keine Stückliste vorhanden.');return;}
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({unit:'mm',format:'a4'});
+  var M=14;
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('Stückliste / Material',M,18);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(100,100,100);
+  doc.text((p.errichter.name||'')+'  ·  Projekt: '+(p.baustelle||p.kunde.name||'')+'  ·  '+fmtDateDE(p.datum),M,25);
+  doc.autoTable({startY:30,head:[['Pos.','Menge','Einheit','Bezeichnung']],
+    body:p.material.map(function(m,i){return [i+1,m.menge,m.einheit,m.bez];}),
+    theme:'grid',styles:{font:'helvetica',fontSize:9,cellPadding:2},
+    headStyles:{fillColor:[31,41,55],textColor:[255,255,255],fontStyle:'bold'},
+    columnStyles:{0:{cellWidth:14,halign:'center'},1:{cellWidth:18,halign:'center'},2:{cellWidth:20,halign:'center'}},
+    margin:{left:M,right:M}});
+  doc.save('Stueckliste_'+(p.baustelle||p.nr||'Projekt').replace(/[^\w-]+/g,'_')+'.pdf');
+}
+function stuecklisteXLSX(idx){
+  var p=protokolle[idx];
+  if(!p||!p.material||!p.material.length){alert('Keine Stückliste vorhanden.');return;}
+  if(typeof XLSX==='undefined'){alert('Excel-Bibliothek nicht geladen. Bitte Internetverbindung prüfen.');return;}
+  var rows=[['Projekt',p.baustelle||''],['Kunde',p.kunde.name||''],['Datum',fmtDateDE(p.datum)],[],
+    ['Pos.','Menge','Einheit','Bezeichnung']];
+  p.material.forEach(function(m,i){rows.push([i+1,m.menge?Number(m.menge):'',m.einheit,m.bez]);});
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:6},{wch:8},{wch:8},{wch:50}];
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Stückliste');
+  XLSX.writeFile(wb,'Stueckliste_'+(p.baustelle||p.nr||'Projekt').replace(/[^\w-]+/g,'_')+'.xlsx');
+}
+
 window.addEventListener('pagehide',saveData);
 document.addEventListener('visibilitychange',function(){if(document.hidden)saveData();});
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </body>
 </html>
