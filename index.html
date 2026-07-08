@@ -706,23 +706,13 @@ textarea{resize:vertical;min-height:52px}
           <button class="btn inf" style="flex:0;font-size:12px;padding:6px 12px" onclick="newWbSimpleProt()">+ Neu</button>
         </div>
 
-        <!-- Logo-Upload -->
-        <div style="background:#f0f4ff;border-radius:10px;padding:12px;margin-bottom:10px">
-          <div class="sec" style="margin-bottom:8px">🖼 Firmenlogo — erscheint oben rechts im PDF</div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <div class="logo-upload-area" style="flex:1" onclick="document.getElementById('logoFileInput').click()">
-              <img id="logoPreviewImg" src="" alt="Logo" class="logo-preview" style="display:none">
-              <div id="logoPlaceholder">
-                <div style="font-size:26px">🖼</div>
-                <div style="font-size:12px;color:#888;margin-top:3px">Logo hochladen<br><small style="color:#aaa">PNG · JPG · SVG</small></div>
-              </div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:6px">
-              <button class="btn inf" style="font-size:12px;white-space:nowrap" onclick="document.getElementById('logoFileInput').click()">📁 Hochladen</button>
-              <button class="btn dan" style="font-size:12px" onclick="removeLogo()">✕ Entfernen</button>
-            </div>
+        <!-- Logo-Status -->
+        <div id="wbLogoStatus" style="background:#f0f4ff;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+          <img id="logoPreviewImg" src="" alt="Logo" style="max-height:44px;max-width:130px;object-fit:contain;display:none;border-radius:4px">
+          <div id="logoPlaceholder" style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:#444">🖼 Kein Firmenlogo hinterlegt</div>
+            <div style="font-size:11px;color:#888;margin-top:2px">Logo im Tab <b>🏢 Arbeitgeber</b> hochladen — es erscheint dann in allen PDFs.</div>
           </div>
-          <input type="file" id="logoFileInput" accept="image/*" style="display:none" onchange="handleLogoUpload(this)">
         </div>
 
         <div id="wbSimpleList"></div>
@@ -738,9 +728,6 @@ textarea{resize:vertical;min-height:52px}
         <div style="flex:1;font-size:14px;font-weight:600">Prüfprotokoll AC-Ladesäulen / Wallboxen</div>
         <div style="flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;min-width:80px">
           <img id="wbFormLogo" src="" alt="" style="max-height:44px;max-width:100px;object-fit:contain;display:none;border-radius:4px">
-          <div id="wbFormLogoPlaceholder" style="width:80px;height:40px;border:1px dashed #d4d4d4;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#fafafa" onclick="document.getElementById('logoFileInput').click()" title="Logo hochladen">
-            <span style="font-size:10px;color:#aaa;text-align:center">Logo<br>hochladen</span>
-          </div>
         </div>
       </div>
 
@@ -928,6 +915,25 @@ textarea{resize:vertical;min-height:52px}
     </div>
 
     <div class="card">
+      <div class="sec">Firmenlogo — erscheint in allen exportierten PDFs</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+        <div class="logo-upload-area" style="flex:1;min-height:70px" id="agLogoArea" onclick="document.getElementById('agLogoInput').click()">
+          <img id="agLogoPreview" src="" alt="Logo" style="max-height:60px;max-width:180px;object-fit:contain;display:none">
+          <div id="agLogoPlaceholder" style="text-align:center">
+            <div style="font-size:28px">🖼</div>
+            <div style="font-size:12px;color:#888;margin-top:4px">Logo hochladen<br><small style="color:#aaa">PNG mit Transparenz empfohlen</small></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button class="btn inf" style="font-size:12px" onclick="document.getElementById('agLogoInput').click()">📁 Hochladen</button>
+          <button class="btn dan" style="font-size:12px" onclick="removeFirmLogo()">✕ Entfernen</button>
+        </div>
+      </div>
+      <input type="file" id="agLogoInput" accept="image/png,image/jpeg,image/svg+xml,image/*" style="display:none" onchange="handleFirmLogoUpload(this)">
+      <div style="font-size:11px;color:#888;margin-top:8px">Das Logo wird oben rechts in alle Protokoll-PDFs, Arbeitszeitberichte und Stücklisten eingefügt.</div>
+    </div>
+
+    <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div class="sec" style="margin:0">Mitarbeiter (<span id="maCount">0</span>)</div>
         <button class="btn inf" style="flex:0;font-size:12px;padding:6px 12px" onclick="openNewMA()">+ Neu anlegen</button>
@@ -1067,6 +1073,7 @@ var baustellen = []; // {name, adresse, lat, lng, dat}
 var protokolle = []; // Prüf-/Abnahmeprotokolle nach DIN EN 62446
 var komponentenDB = {module:[],wr:[],zsk:[],material:[],wallbox:[]}; // wiederverwendbare Hersteller/Typen
 var firma = {name:'',str:'',plz:''};
+var firmLogo = ''; // base64 DataURL des Firmenlogos — wird in alle PDFs eingefügt
 var currentUser = null;
 var currentMonth, currentYear;
 var timerSec=0, timerRunning=false, timerInt=null, pauseMins=0;
@@ -1204,7 +1211,7 @@ function initApp(){
     updateUrlaubKonto();
     getGPS();
   }
-  gotoTab('heute');renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
+  gotoTab('heute');renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();renderFirmLogo();
 
   var ub=document.getElementById('uploadBox');
   ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
@@ -1483,6 +1490,48 @@ function renderMonth(){
 }
 
 // ============ ARBEITGEBER ============
+// --- Firmenlogo ---
+function handleFirmLogoUpload(input){
+  var file=input.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    firmLogo=e.target.result;
+    try{localStorage.setItem('az_firm_logo',firmLogo);}catch(ex){}
+    renderFirmLogo();
+    // auch Wallbox-Logo-Vorschau aktualisieren
+    renderLogoPreview();
+  };
+  reader.readAsDataURL(file);
+}
+function removeFirmLogo(){
+  firmLogo='';
+  try{localStorage.removeItem('az_firm_logo');}catch(e){}
+  renderFirmLogo();
+  renderLogoPreview();
+}
+function renderFirmLogo(){
+  var prev=document.getElementById('agLogoPreview');
+  var ph=document.getElementById('agLogoPlaceholder');
+  if(firmLogo){
+    if(prev){prev.src=firmLogo;prev.style.display='block';}
+    if(ph)ph.style.display='none';
+  }else{
+    if(prev)prev.style.display='none';
+    if(ph)ph.style.display='block';
+  }
+}
+// Helper: Logo oben rechts in jsPDF einfügen
+function addLogoToPDF(doc,PW,M){
+  if(!firmLogo)return;
+  try{
+    var fmt=firmLogo.indexOf('image/png')>-1?'PNG':'JPEG';
+    // Zielgröße max 55×20mm, Seitenverhältnis beibehalten
+    var img=new Image();img.src=firmLogo;
+    var nh=20,nw=55;
+    if(img.width&&img.height){var ar=img.width/img.height;if(ar>nw/nh)nh=nw/ar;else nw=nh*ar;}
+    doc.addImage(firmLogo,fmt,PW-M-nw,6,nw,nh);
+  }catch(e){console.warn('Logo konnte nicht eingefügt werden:',e);}
+}
 function saveFirma(){firma={name:document.getElementById('agFirma').value.trim(),str:document.getElementById('agStr').value.trim(),plz:document.getElementById('agPlz').value.trim()};saveData();}
 function renderMAListe(){
   var el=document.getElementById('maListe');if(!el)return;document.getElementById('maCount').textContent=employees.length;
@@ -1601,6 +1650,7 @@ function importBackup(event){
       entries=data.entries||[];
       fotos=data.fotos||[];
       if(data.firma)firma=data.firma;
+    try{var _fl=localStorage.getItem('az_firm_logo');if(_fl)firmLogo=_fl;}catch(e){}
       saveData();
       alert('Backup erfolgreich importiert.');
       location.reload();
@@ -1649,6 +1699,7 @@ function exportPDF(){
     var jsPDF=window.jspdf.jsPDF;
     var doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
     var M=14;var PW=210;var y=18;
+    addLogoToPDF(doc,PW,M);
     doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(17,17,17);
     doc.text('Arbeitszeitbericht',M,y);
     doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(130,130,130);
@@ -1730,6 +1781,7 @@ function exportPDFprint(){
     +'@media print{@page{margin:10mm}body{padding:0}}'
     +'</style></head><body>'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+    +(firmLogo?'<img src="'+firmLogo+'" style="max-height:50px;max-width:160px;object-fit:contain;position:absolute;top:14mm;right:14mm">':'')
     +'<div><h1>Arbeitszeitbericht</h1>'
     +(s.firma?'<div class="meta">'+s.firma+'</div>':'')
     +(s.ma?'<div class="meta">'+s.ma.vn+' '+s.ma.nl+(s.ma.rolle?' · '+s.ma.rolle:'')+'</div>':'')
@@ -1794,6 +1846,7 @@ function storageWorks(){
 function saveLocal(){
   try{
     localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()}));
+    try{if(firmLogo)localStorage.setItem('az_firm_logo',firmLogo);else localStorage.removeItem('az_firm_logo');}catch(e2){}
   }catch(err){}
 }
 function loadLocal(){
@@ -2558,7 +2611,8 @@ function buildProtokollPDF(p,pf,imgs){
   var jsPDF=window.jspdf.jsPDF;
   var doc=new jsPDF({unit:'mm',format:'a4'});
   var M=14,PW=210,PH=297,y=16;
-  function nl(need){if(y+need>PH-16){doc.addPage();y=16;}}
+  addLogoToPDF(doc,PW,M);
+  function nl(need){if(y+need>PH-16){doc.addPage();y=16;addLogoToPDF(doc,PW,M);}}
   function h1(t){doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(17,17,17);doc.text(t,M,y);y+=6;}
   function h2(t){nl(10);doc.setFillColor(31,41,55);doc.rect(M,y-4,PW-2*M,6,'F');doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(255,255,255);doc.text(t,M+2,y);y+=6;}
   function kv(rows){
@@ -2735,6 +2789,7 @@ function stuecklistePDF(idx){
   var jsPDF=window.jspdf.jsPDF;
   var doc=new jsPDF({unit:'mm',format:'a4'});
   var M=14;
+  addLogoToPDF(doc,210,M);
   doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('Stückliste / Material',M,18);
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(100,100,100);
   doc.text((p.errichter.name||'')+'  ·  Projekt: '+(p.baustelle||p.kunde.name||'')+'  ·  '+fmtDateDE(p.datum),M,25);
@@ -2780,29 +2835,22 @@ function saveWbData() {
   try { localStorage.setItem('az_wb_simple', JSON.stringify({prots:wbSimpleProts,logo:wbLogo})); } catch(e) {}
 }
 
-function handleLogoUpload(input) {
-  var file = input.files[0]; if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(e) { wbLogo = e.target.result; saveWbData(); renderLogoPreview(); };
-  reader.readAsDataURL(file);
-}
-function removeLogo() { wbLogo=''; saveWbData(); renderLogoPreview(); }
+function handleLogoUpload(input) { handleFirmLogoUpload(input); }
+function removeLogo() { removeFirmLogo(); }
 
 function renderLogoPreview() {
+  // uses global firmLogo
   var prev = document.getElementById('logoPreviewImg');
   var ph   = document.getElementById('logoPlaceholder');
   var fLogo = document.getElementById('wbFormLogo');
-  var fPh   = document.getElementById('wbFormLogoPlaceholder');
-  if (wbLogo) {
-    if(prev){prev.src=wbLogo;prev.style.display='block';}
+  if (firmLogo) {
+    if(prev){prev.src=firmLogo;prev.style.display='block';}
     if(ph)ph.style.display='none';
-    if(fLogo){fLogo.src=wbLogo;fLogo.style.display='block';}
-    if(fPh)fPh.style.display='none';
+    if(fLogo){fLogo.src=firmLogo;fLogo.style.display='block';}
   } else {
     if(prev)prev.style.display='none';
-    if(ph)ph.style.display='block';
+    if(ph)ph.style.display='flex';
     if(fLogo)fLogo.style.display='none';
-    if(fPh)fPh.style.display='flex';
   }
 }
 
@@ -2939,13 +2987,8 @@ function buildWbSimplePDF(p) {
   var doc = new jsPDF({unit:'mm',format:'a4'});
   var M=14, PW=210, y=18;
 
-  // Logo oben rechts
-  if (wbLogo) {
-    try {
-      var ext = wbLogo.indexOf('image/png')>-1?'PNG':'JPEG';
-      doc.addImage(wbLogo,ext,PW-M-52,6,52,22);
-    } catch(e) {}
-  }
+  // Logo oben rechts (globales Firmenlogo)
+  addLogoToPDF(doc,PW,M);
 
   // Titel
   doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(17,17,17);
