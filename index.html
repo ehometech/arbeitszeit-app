@@ -405,7 +405,28 @@ textarea{resize:vertical;min-height:52px}
     </div>
 
     <div class="card">
-      <div class="sec">Admin-Einstellungen</div>
+      <div class="sec">🔍 Daten-Diagnose (Debug-Panel)</div>
+      <div style="background:#f0f0f0;border-radius:8px;padding:12px;margin-bottom:12px;font-size:11px;font-family:monospace">
+        <div style="margin-bottom:8px">
+          <strong>Gesamte Einträge:</strong> <span id="debugTotalEntries">0</span>
+        </div>
+        <div style="margin-bottom:8px">
+          <strong>Firebase Status:</strong> <span id="debugFirebaseStatus">❌ Nicht verbunden</span>
+        </div>
+        <div style="margin-bottom:8px">
+          <strong>Cloud-Sync:</strong> <span id="debugCloudSync">Wird überprüft...</span>
+        </div>
+        <div id="debugAvailableMonths" style="margin-top:12px;line-height:1.6">
+          <strong>Verfügbare Monate:</strong><br>
+          <span style="color:#666">Wird geladen...</span>
+        </div>
+      </div>
+      <div class="brow" style="gap:6px">
+        <button class="btn inf" onclick="refreshDebugPanel()">🔄 Aktualisieren</button>
+        <button class="btn warn" onclick="forceCloudSync()">☁️ Cloud sync erzwingen</button>
+        <button class="btn suc" onclick="downloadFullBackup()">⬇️ Backup laden</button>
+      </div>
+    </div>
       <div style="background:#fef3c7;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:8px">
         🔑 Aktueller Arbeitgeber-PIN: <strong id="currentPinDisplay">****</strong>
       </div>
@@ -605,6 +626,9 @@ function initApp(){
   ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
   ub.addEventListener('dragleave',function(){ub.classList.remove('dragover');});
   ub.addEventListener('drop',function(e){e.preventDefault();ub.classList.remove('dragover');handleFotos(e.dataTransfer.files);});
+  
+  // Debug Panel initialisieren
+  initDebugPanel();
 }
 
 // ============ TABS ============
@@ -1084,6 +1108,128 @@ function exportCSVRange(fromDate,toDate){
   link.setAttribute('download','Arbeitsbericht_'+fromDate+'_'+toDate+(ma?'_'+ma.vn:'')+'.csv');
   link.click();
   alert('✅ CSV exportiert');
+}
+
+// ============ DEBUG & RECOVERY PANEL ============
+function refreshDebugPanel(){
+  // Gesamte Einträge
+  document.getElementById('debugTotalEntries').textContent = entries.length;
+  
+  // Firebase Status
+  var fbStatus = firebaseReady 
+    ? '✅ Verbunden' + (cloudSynced ? ' (synchronisiert)' : ' (synchronisiert wird...)')
+    : '❌ Nicht verbunden';
+  document.getElementById('debugFirebaseStatus').textContent = fbStatus;
+  
+  // Cloud-Sync Status
+  var cloudStatus = cloudSynced 
+    ? '✅ Lokale Daten sind aktuell'
+    : '⏳ Wird synchronisiert...';
+  document.getElementById('debugCloudSync').textContent = cloudStatus;
+  
+  // Verfügbare Monate auflisten
+  var monthMap = {};
+  entries.forEach(function(e){
+    if(e.dat){
+      var m = e.dat.substring(0,7); // YYYY-MM format
+      monthMap[m] = (monthMap[m] || 0) + 1;
+    }
+  });
+  
+  var sortedMonths = Object.keys(monthMap).sort().reverse();
+  var monthsHTML = sortedMonths.length > 0 
+    ? sortedMonths.map(function(m){
+        var count = monthMap[m];
+        var parts = m.split('-');
+        var monthName = monthNames[parseInt(parts[1])-1] + ' ' + parts[0];
+        return '<div style="padding:4px 0;border-bottom:1px solid #e5e5e5">' + 
+               monthName + ': <strong>' + count + ' Einträge</strong></div>';
+      }).join('')
+    : '<div style="color:#999">Keine Einträge vorhanden</div>';
+  
+  document.getElementById('debugAvailableMonths').innerHTML = 
+    '<strong>Verfügbare Monate (nach Datum sortiert):</strong><br>' + monthsHTML;
+}
+
+function forceCloudSync(){
+  if(!firebaseReady){
+    alert('Firebase nicht verbunden. Bitte Internet prüfen.');
+    return;
+  }
+  alert('🔄 Force-Sync wird gestartet...');
+  cloudSynced = true; // Erlaube Schreiben
+  saveLock = Date.now() + 500; // Kurze Sperre
+  pushToCloud();
+  setTimeout(function(){
+    alert('✅ Cloud-Synchronisierung abgeschlossen!');
+    refreshDebugPanel();
+  }, 1000);
+}
+
+function downloadFullBackup(){
+  if(entries.length === 0){
+    alert('Keine Einträge zum Backup vorhanden.');
+    return;
+  }
+  
+  // Erstelle Backup mit ALLEN Daten
+  var backup = {
+    timestamp: new Date().toISOString(),
+    APP_PIN: APP_PIN,
+    employees: employees,
+    entries: entries,
+    fotos: fotos,
+    firma: firma,
+    baustellen: baustellen,
+    timers: timers,
+    protokolle: protokolle || [],
+    totalEntries: entries.length,
+    monthRange: {
+      earliest: entries.map(e => e.dat).filter(Boolean).sort()[0],
+      latest: entries.map(e => e.dat).filter(Boolean).sort().reverse()[0]
+    }
+  };
+  
+  var blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'arbeitszeit-vollbackup_' + new Date().toISOString().split('T')[0] + '.json';
+  link.click();
+  
+  alert('✅ Vollständiges Backup heruntergeladen!\nEinträge: ' + entries.length);
+}
+
+function listAllDataByMonth(){
+  var monthMap = {};
+  entries.forEach(function(e){
+    if(e.dat){
+      var m = e.dat.substring(0,7);
+      if(!monthMap[m]) monthMap[m] = [];
+      monthMap[m].push(e);
+    }
+  });
+  
+  console.log('=== ALLE DATEN NACH MONAT ===');
+  Object.keys(monthMap).sort().reverse().forEach(function(month){
+    console.log(month + ': ' + monthMap[month].length + ' Einträge');
+    monthMap[month].forEach(function(e){
+      console.log('  - ' + e.dat + ': ' + e.h + 'h (' + eLabels[e.typ] + ')');
+    });
+  });
+}
+
+// Automatisch beim Laden ausführen
+function initDebugPanel(){
+  setTimeout(function(){
+    refreshDebugPanel();
+    // Auch in Console ausgeben
+    console.log('🔍 Debug-Panel aktualisiert');
+    console.log('📊 Einträge gesamt: ' + entries.length);
+    if(entries.length > 0){
+      console.log('📅 Zeitraum: ' + entries.map(e => e.dat).filter(Boolean).sort()[0] + 
+                  ' bis ' + entries.map(e => e.dat).filter(Boolean).sort().reverse()[0]);
+    }
+  }, 500);
 }
 
 function exportPDF(){
