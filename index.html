@@ -1837,7 +1837,7 @@ function saveProtDraft(){
     localStorage.setItem(PROT_DRAFT_KEY,JSON.stringify({version:2,idx:editingProtIdx,recordId:original&&original.id!=null?original.id:null,p:buildProtFromForm(),t:Date.now()}));
   }catch(e){console.warn('Protokoll-Entwurf konnte nicht lokal gespeichert werden:',e);}
 }
-function queueProtDraft(){clearTimeout(protDraftTimer);protDraftTimer=setTimeout(saveProtDraft,800);}
+function queueProtDraft(){clearTimeout(protDraftTimer);protDraftTimer=setTimeout(saveProtDraft,150);}
 function restoreProtDraft(){
   try{
     var d=JSON.parse(localStorage.getItem(PROT_DRAFT_KEY)||'null');
@@ -2701,8 +2701,10 @@ function stuecklisteXLSX(idx){
 (function(){
   var fv=document.getElementById('protFormView');
   if(fv){
-    fv.addEventListener('input',queueProtDraft);
-    fv.addEventListener('change',queueProtDraft);
+    // Texteingaben sofort sichern. Das ist besonders bei lokalen file://-Seiten
+    // wichtig, weil ein Reload ausstehende Timer ohne Vorwarnung beenden kann.
+    fv.addEventListener('input',saveProtDraft);
+    fv.addEventListener('change',saveProtDraft);
     // Erfasst auch dynamisch hinzugefuegte/entfernte Zeilen und Checkbox-Aenderungen.
     fv.addEventListener('click',function(e){if(e.target&&e.target.closest('button'))queueProtDraft();});
   }
@@ -2714,13 +2716,12 @@ window.addEventListener('beforeunload',function(){saveProtDraft();saveLocal();})
 window.addEventListener('pagehide',function(){saveProtDraft();saveData();});
 document.addEventListener('visibilitychange',function(){if(document.hidden){saveProtDraft();saveData();}});
 
-// Nach einem echten Seiten-Reload den zuletzt offenen Entwurf automatisch
-// anzeigen. Bei normalem Start bleibt die Protokollliste unveraendert.
+// Einen vorhandenen Entwurf nach dem Laden immer automatisch anzeigen.
+// Die Navigation-API meldet lokale file://-Reloads nicht in jedem Browser
+// verlaesslich als "reload"; deshalb nicht von dieser Erkennung abhaengig sein.
 setTimeout(function(){
   try{
-    var nav=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0];
-    var reloaded=nav?nav.type==='reload':(performance.navigation&&performance.navigation.type===1);
-    if(reloaded&&currentUser&&localStorage.getItem(PROT_DRAFT_KEY)){
+    if(currentUser&&localStorage.getItem(PROT_DRAFT_KEY)){
       gotoTab('protokoll');
       restoreProtDraft();
     }
