@@ -912,6 +912,7 @@ var cloudSynced=false; // becomes true only AFTER the first real snapshot (or co
 var docRef=null;
 var applyingSnapshot=false;
 var saveLock=0;
+var localSavedAt=0; // Zeitstempel des zuletzt lokal gesicherten Gesamtstands
 var isOnline=navigator.onLine;
 var offlineQueue=[];
 
@@ -1623,7 +1624,8 @@ function storageWorks(){
 }
 function saveLocal(){
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()}));
+    localSavedAt=Date.now();
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date(localSavedAt).toISOString()}));
   }catch(err){}
 }
 function loadLocal(){
@@ -1631,6 +1633,7 @@ function loadLocal(){
     var raw=localStorage.getItem(STORAGE_KEY);
     if(!raw)return;
     var data=JSON.parse(raw);
+    localSavedAt=Date.parse(data.savedAt||'')||0;
     if(data.APP_PIN)APP_PIN=data.APP_PIN;
     if(Array.isArray(data.employees))employees=data.employees;
     if(Array.isArray(data.entries))entries=data.entries;
@@ -1649,7 +1652,9 @@ function saveData(){
 }
 function pushToCloud(){
   if(firebaseReady && cloudSynced && docRef && !applyingSnapshot){
-    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()})
+    var cloudWriteAt=Date.now();
+    if(cloudWriteAt>localSavedAt)localSavedAt=cloudWriteAt;
+    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date(localSavedAt).toISOString()})
       .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);});
   }
 }
@@ -1685,6 +1690,14 @@ function initFirebase(){
       if(Date.now()<saveLock){ cloudSynced=true; pushToCloud(); return; }
       if(snap.exists){
         var d=snap.data();
+        var cloudSavedAt=Date.parse(d.savedAt||'')||0;
+        // Ein Reload darf einen gerade lokal gespeicherten Timer oder ein
+        // Protokoll nicht mit einem aelteren Firebase-Stand ueberschreiben.
+        if(localSavedAt>cloudSavedAt){
+          cloudSynced=true;
+          pushToCloud();
+          return;
+        }
         applyingSnapshot=true;
         if(d.APP_PIN)APP_PIN=d.APP_PIN;
         if(Array.isArray(d.employees))employees=d.employees;
@@ -1695,6 +1708,7 @@ function initFirebase(){
         if(d.firma)firma=d.firma;
         if(Array.isArray(d.protokolle))protokolle=d.protokolle;
         if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},d.komponentenDB);
+        localSavedAt=cloudSavedAt;
         applyingSnapshot=false;
         cloudSynced=true;
         saveLocal();
