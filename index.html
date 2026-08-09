@@ -132,7 +132,7 @@ textarea{resize:vertical;min-height:52px}
   <div class="login-card">
     <div style="font-size:40px;margin-bottom:12px">⏱</div>
     <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit App</div>
-    <div style="font-size:13px;color:#888;margin-bottom:20px">v11 · Notstromfähigkeit + Auftraggeber + Speicher-SNs + Prüfgeräte</div>
+    <div style="font-size:13px;color:#888;margin-bottom:20px">v12 · Notstromfähigkeit + Auftraggeber + Speicher-SNs + Prüfgeräte</div>
     <div id="userStep">
       <div id="userList"></div>
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0">
@@ -152,7 +152,7 @@ textarea{resize:vertical;min-height:52px}
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 11 · Notstromfähigkeit + Auftraggeber + Speicher-SNs + Prüfgeräte</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 12 · Notstromfähigkeit + Auftraggeber + Speicher-SNs + Prüfgeräte</div>
 </div>
 
 <!-- MAIN APP -->
@@ -912,7 +912,7 @@ var cloudSynced=false; // becomes true only AFTER the first real snapshot (or co
 var docRef=null;
 var applyingSnapshot=false;
 var saveLock=0;
-var localSavedAt=0; // Zeitstempel des zuletzt lokal gesicherten Gesamtstands
+var cloudProtDraft=null; // Protokoll-Entwurf zusätzlich in Firestore für geräteübergreifendes Arbeiten
 var isOnline=navigator.onLine;
 var offlineQueue=[];
 
@@ -1035,14 +1035,7 @@ function initApp(){
     updateUrlaubKonto();
     getGPS();
   }
-  var startTab='heute';
-  try{
-    var savedTab=localStorage.getItem('az_active_tab');
-    if(['heute','eintrag','fotos','monat','protokoll','ag','profil'].indexOf(savedTab)>=0)startTab=savedTab;
-  }catch(e){}
-  // Die Arbeitgeber-Seite darf bei einem Mitarbeiter-Login nicht geoeffnet werden.
-  if(startTab==='ag'&&!isAG())startTab='heute';
-  gotoTab(startTab);renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
+  gotoTab('heute');renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
 
   var ub=document.getElementById('uploadBox');
   ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
@@ -1060,7 +1053,6 @@ function getGPS(){
 
 // ============ TABS ============
 function gotoTab(id){
-  try{localStorage.setItem('az_active_tab',id);}catch(e){}
   ['heute','eintrag','fotos','monat','protokoll','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('active');});
   var tel=document.getElementById('tab-'+id);if(tel)tel.classList.add('active');
@@ -1632,8 +1624,7 @@ function storageWorks(){
 }
 function saveLocal(){
   try{
-    localSavedAt=Date.now();
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date(localSavedAt).toISOString()}));
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()}));
   }catch(err){}
 }
 function loadLocal(){
@@ -1641,7 +1632,6 @@ function loadLocal(){
     var raw=localStorage.getItem(STORAGE_KEY);
     if(!raw)return;
     var data=JSON.parse(raw);
-    localSavedAt=Date.parse(data.savedAt||'')||0;
     if(data.APP_PIN)APP_PIN=data.APP_PIN;
     if(Array.isArray(data.employees))employees=data.employees;
     if(Array.isArray(data.entries))entries=data.entries;
@@ -1656,15 +1646,15 @@ function loadLocal(){
 function saveData(){
   saveLocal();
   saveLock=Date.now()+30000;
-  pushToCloud();
+  return pushToCloud();
 }
 function pushToCloud(){
   if(firebaseReady && cloudSynced && docRef && !applyingSnapshot){
-    var cloudWriteAt=Date.now();
-    if(cloudWriteAt>localSavedAt)localSavedAt=cloudWriteAt;
-    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date(localSavedAt).toISOString()})
-      .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);});
+    return docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()})
+      .then(function(){return true;})
+      .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);throw e;});
   }
+  return Promise.resolve(false);
 }
 function refreshAll(){
   buildUserList();
@@ -1698,14 +1688,6 @@ function initFirebase(){
       if(Date.now()<saveLock){ cloudSynced=true; pushToCloud(); return; }
       if(snap.exists){
         var d=snap.data();
-        var cloudSavedAt=Date.parse(d.savedAt||'')||0;
-        // Ein Reload darf einen gerade lokal gespeicherten Timer oder ein
-        // Protokoll nicht mit einem aelteren Firebase-Stand ueberschreiben.
-        if(localSavedAt>cloudSavedAt){
-          cloudSynced=true;
-          pushToCloud();
-          return;
-        }
         applyingSnapshot=true;
         if(d.APP_PIN)APP_PIN=d.APP_PIN;
         if(Array.isArray(d.employees))employees=d.employees;
@@ -1716,7 +1698,7 @@ function initFirebase(){
         if(d.firma)firma=d.firma;
         if(Array.isArray(d.protokolle))protokolle=d.protokolle;
         if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},d.komponentenDB);
-        localSavedAt=cloudSavedAt;
+        cloudProtDraft=d.protDraft||null;
         applyingSnapshot=false;
         cloudSynced=true;
         saveLocal();
@@ -1847,34 +1829,50 @@ function protSectStep(d){
   showProtSect(PROT_SECTS[n][0]);
 }
 function updateProtTyp(){showProtSect(currentProtSect);}
-// Entwurf (Autosave gegen Datenverlust bei Reload)
+// Entwurf (Autosave lokal + Firestore für geräteübergreifendes Arbeiten)
 var protDraftTimer=null;
-var PROT_DRAFT_KEY='az_prot_draft';
-function saveProtDraft(){
-  clearTimeout(protDraftTimer);protDraftTimer=null;
-  var fv=document.getElementById('protFormView');
-  if(!fv||fv.style.display==='none')return;
-  try{
-    var original=(editingProtIdx>=0&&protokolle[editingProtIdx])?protokolle[editingProtIdx]:null;
-    localStorage.setItem(PROT_DRAFT_KEY,JSON.stringify({version:2,idx:editingProtIdx,recordId:original&&original.id!=null?original.id:null,p:buildProtFromForm(),t:Date.now()}));
-  }catch(e){console.warn('Protokoll-Entwurf konnte nicht lokal gespeichert werden:',e);}
+function getLocalProtDraft(){
+  try{return JSON.parse(localStorage.getItem('az_prot_draft')||'null');}catch(e){return null;}
 }
-function queueProtDraft(){clearTimeout(protDraftTimer);protDraftTimer=setTimeout(saveProtDraft,150);}
+function getBestProtDraft(){
+  var l=getLocalProtDraft(), c=cloudProtDraft;
+  if(l&&l.p&&c&&c.p)return Number(c.t||0)>Number(l.t||0)?c:l;
+  return (c&&c.p)?c:((l&&l.p)?l:null);
+}
+function saveProtDraft(){
+  var fv=document.getElementById('protFormView');
+  if(!fv||fv.style.display==='none')return Promise.resolve(false);
+  var draft={idx:editingProtIdx,p:buildProtFromForm(),t:Date.now(),device:navigator.userAgent||''};
+  try{localStorage.setItem('az_prot_draft',JSON.stringify(draft));}catch(e){}
+  cloudProtDraft=draft;
+  if(firebaseReady&&cloudSynced&&docRef){
+    return docRef.set({protDraft:draft,protDraftSavedAt:new Date().toISOString()},{merge:true})
+      .then(function(){renderProtokollListe();return true;})
+      .catch(function(e){console.warn('Cloud-Entwurf konnte nicht gespeichert werden:',e);return false;});
+  }
+  return Promise.resolve(false);
+}
+function queueProtDraft(){clearTimeout(protDraftTimer);protDraftTimer=setTimeout(saveProtDraft,1500);}
 function restoreProtDraft(){
   try{
-    var d=JSON.parse(localStorage.getItem(PROT_DRAFT_KEY)||'null');
+    var d=getBestProtDraft();
     if(!d||!d.p){alert('Kein Entwurf vorhanden.');return;}
-    var found=-1;
-    if(d.recordId!=null)found=protokolle.findIndex(function(p){return p&&String(p.id)===String(d.recordId);});
-    else if(typeof d.idx==='number'&&d.idx>=0&&d.idx<protokolle.length)found=d.idx; // alte Entwuerfe
-    editingProtIdx=found;
+    editingProtIdx=(typeof d.idx==='number'&&d.idx>=0&&d.idx<protokolle.length)?d.idx:-1;
     openProtokollForm(d.p);
   }catch(e){alert('Entwurf konnte nicht geladen werden.');}
 }
+function clearProtDraft(){
+  try{localStorage.removeItem('az_prot_draft');}catch(e){}
+  cloudProtDraft=null;
+  if(firebaseReady&&cloudSynced&&docRef){
+    return docRef.set({protDraft:firebase.firestore.FieldValue.delete(),protDraftSavedAt:firebase.firestore.FieldValue.delete()},{merge:true})
+      .catch(function(e){console.warn('Cloud-Entwurf konnte nicht gelöscht werden:',e);});
+  }
+  return Promise.resolve();
+}
 function discardProtDraft(){
   if(!confirm('Entwurf endgültig verwerfen?'))return;
-  try{localStorage.removeItem(PROT_DRAFT_KEY);}catch(e){}
-  renderProtokollListe();
+  clearProtDraft().then(renderProtokollListe);
 }
 // Fotos direkt im Protokoll aufnehmen
 function handleProtFotos(files){
@@ -2299,7 +2297,7 @@ function renderProtokollListe(){
   var allDb=komponentenDB.module.length+komponentenDB.wr.length+(komponentenDB.speicher||[]).length+komponentenDB.zsk.length+(komponentenDB.wallbox||[]).length+komponentenDB.material.length;
   var allEl=document.getElementById('dbCountAll');if(allEl)allEl.textContent=allDb;
   var db=document.getElementById('protDraftBanner');
-  if(db)db.style.display=localStorage.getItem(PROT_DRAFT_KEY)?'block':'none';
+  if(db)db.style.display=getBestProtDraft()?'block':'none';
   if(!protokolle.length){el.innerHTML='<div style="color:#888;font-size:13px;padding:16px 0;text-align:center">Noch keine Protokolle.<br>Tippe auf „+ Neues Protokoll".</div>';return;}
   el.innerHTML=protokolle.map(function(p,i){
     var auftragOk=!p.auftraggeber||!!p.sigAuftraggeber;
@@ -2317,9 +2315,6 @@ function renderProtokollListe(){
   }).join('');
 }
 function newProtokoll(){
-  try{
-    if(localStorage.getItem(PROT_DRAFT_KEY)&&!confirm('Es gibt einen ungespeicherten Entwurf. Mit OK wird ein neues Protokoll begonnen; der Entwurf bleibt erhalten, bis du im neuen Formular etwas aenderst. Abbrechen stellt den Entwurf wieder her.')){restoreProtDraft();return;}
-  }catch(e){}
   editingProtIdx=-1;
   openProtokollForm(null);
 }
@@ -2468,10 +2463,23 @@ function saveProtokoll(silent){
   if(editingProtIdx>=0&&protokolle[editingProtIdx])protokolle[editingProtIdx]=p;
   else{protokolle.unshift(p);editingProtIdx=0;}
   upsertKomponenten(p);
-  saveData();
+  var cloudSave=saveData();
   fillDatalists();
-  try{localStorage.removeItem(PROT_DRAFT_KEY);}catch(e){}
-  if(!silent){alert('Protokoll gespeichert!');closeProtokollForm();}
+  clearProtDraft();
+  if(!silent){
+    if(firebaseReady&&cloudSynced){
+      cloudSave.then(function(ok){
+        alert(ok?'Protokoll gespeichert und mit Firebase synchronisiert!':'Protokoll lokal gespeichert. Firebase war noch nicht bereit.');
+        closeProtokollForm();
+      }).catch(function(e){
+        alert('Protokoll wurde lokal gespeichert, aber Firebase-Synchronisierung ist fehlgeschlagen. Bitte Internet/Firebase-Regeln prüfen.');
+        closeProtokollForm();
+      });
+    }else{
+      alert('Protokoll lokal gespeichert. Firebase-Verbindung ist aktuell noch nicht bereit.');
+      closeProtokollForm();
+    }
+  }
 }
 
 // ---- Bild als DataURL laden (für PDF, Cloudinary erlaubt CORS) ----
@@ -2560,7 +2568,7 @@ function buildProtokollPDF(p,pf,imgs){
   if(!isWb&&p.strings&&p.strings.length){
     h2('Strangmessungen (DC)');
     doc.autoTable({startY:y,
-      head:[['Strang','Module','Polarität','Uoc (V)','Isc (A)','Riso (MOhm)','Erdung (Ohm)']],
+      head:[['Strang','Module','Polarität','Uoc (V)','Isc (A)','Riso (MΩ)','Erdung (Ω)']],
       body:p.strings.map(function(s,i){return [i+1,s.anz||'-',s.pol==='nein'?'n.i.O.':'i.O.',s.uoc||'-',s.isc||'-',s.riso||'-',s.erd||'-'];}),
       theme:'grid',styles:{font:'helvetica',fontSize:8,cellPadding:1.5,halign:'center'},
       headStyles:{fillColor:[240,240,240],textColor:[40,40,40],fontStyle:'bold'},margin:{left:M,right:M}});
@@ -2601,7 +2609,7 @@ function buildProtokollPDF(p,pf,imgs){
   if(v.kreise&&v.kreise.length){
     nl(20);h2('DIN VDE 0100-600 — Messen'+(v.verteiler?' · Verteiler '+v.verteiler:''));
     doc.autoTable({startY:y,
-      head:[['Nr.','Zielbezeichnung','Leitung','Anz.×mm²','Sicherung','In (A)','Zs (Ohm)','Riso (MOhm)','IΔn (mA)','tA (ms)']],
+      head:[['Nr.','Zielbezeichnung','Leitung','Anz.×mm²','Sicherung','In (A)','Zs (Ω)','Riso (MΩ)','IΔn (mA)','tA (ms)']],
       body:v.kreise.map(function(k,i){return [i+1,k.ziel||'-',k.typ||'-',k.quer||'-',k.sich||'-',k.inA||'-',k.zs||'-',k.riso||'-',k.idn||'-',k.ta||'-'];}),
       theme:'grid',styles:{font:'helvetica',fontSize:7,cellPadding:1.2,halign:'center'},
       headStyles:{fillColor:[240,240,240],textColor:[40,40,40],fontStyle:'bold'},
@@ -2610,7 +2618,7 @@ function buildProtokollPDF(p,pf,imgs){
   }
   var paSel=VDE_PA.filter(function(c){return v.pa&&v.pa[c[0]];}).map(function(c){return c[1];});
   if(paSel.length){
-    nl(12);h2('Durchgängigkeit Potentialausgleich (< 1 Ohm nachgewiesen)');
+    nl(12);h2('Durchgängigkeit Potentialausgleich (< 1 Ω nachgewiesen)');
     doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(40,40,40);
     var pat=doc.splitTextToSize(paSel.join('  ·  '),PW-2*M);
     doc.text(pat,M,y);y+=pat.length*3.8+3;
@@ -2620,8 +2628,8 @@ function buildProtokollPDF(p,pf,imgs){
   kv([
     ['Netzform / Netzbetreiber',(p.ac.netz||'—')+(p.ac.betreiber?' · '+p.ac.betreiber:'')],
     ['RCD',(p.ac.rcd||'—')+(p.ac.rcdMs?' · Auslösezeit '+p.ac.rcdMs+' ms':'')],
-    ['Schutzleiter / Erdung','Durchgängigkeit '+(p.ac.schutzl||'—')+' Ohm · RE '+(p.ac.re||'—')+' Ohm'],
-    ['Riso AC / Zs',(p.ac.riso||'—')+' MOhm · Zs '+(p.ac.zs||'—')+' Ohm']
+    ['Schutzleiter / Erdung','Durchgängigkeit '+(p.ac.schutzl||'—')+' Ω · RE '+(p.ac.re||'—')+' Ω'],
+    ['Riso AC / Zs',(p.ac.riso||'—')+' MΩ · Zs '+(p.ac.zs||'—')+' Ω']
   ]);
   // Stückliste
   if(p.material&&p.material.length){
@@ -2722,33 +2730,11 @@ function stuecklisteXLSX(idx){
 // Protokoll-Entwurf automatisch sichern
 (function(){
   var fv=document.getElementById('protFormView');
-  if(fv){
-    // Texteingaben sofort sichern. Das ist besonders bei lokalen file://-Seiten
-    // wichtig, weil ein Reload ausstehende Timer ohne Vorwarnung beenden kann.
-    fv.addEventListener('input',saveProtDraft);
-    fv.addEventListener('change',saveProtDraft);
-    // Erfasst auch dynamisch hinzugefuegte/entfernte Zeilen und Checkbox-Aenderungen.
-    fv.addEventListener('click',function(e){if(e.target&&e.target.closest('button'))queueProtDraft();});
-  }
+  if(fv){fv.addEventListener('input',queueProtDraft);fv.addEventListener('change',queueProtDraft);}
 })();
 
-// Debounce-Timer werden beim Reload eventuell nicht mehr ausgefuehrt. Deshalb
-// den Formularstand bei allen Verlassen-/Hintergrund-Ereignissen synchron sichern.
-window.addEventListener('beforeunload',function(){saveProtDraft();saveLocal();});
-window.addEventListener('pagehide',function(){saveProtDraft();saveData();});
-document.addEventListener('visibilitychange',function(){if(document.hidden){saveProtDraft();saveData();}});
-
-// Einen vorhandenen Entwurf nach dem Laden immer automatisch anzeigen.
-// Die Navigation-API meldet lokale file://-Reloads nicht in jedem Browser
-// verlaesslich als "reload"; deshalb nicht von dieser Erkennung abhaengig sein.
-setTimeout(function(){
-  try{
-    if(currentUser&&localStorage.getItem(PROT_DRAFT_KEY)){
-      gotoTab('protokoll');
-      restoreProtDraft();
-    }
-  }catch(e){}
-},0);
+window.addEventListener('pagehide',saveData);
+document.addEventListener('visibilitychange',function(){if(document.hidden)saveData();});
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
