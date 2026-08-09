@@ -98,6 +98,8 @@ textarea{resize:vertical;min-height:52px}
 .gps-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:3px 6px;background:#e0f2fe;color:#0369a1;border-radius:4px;margin-top:6px}
 .offline-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:4px 8px;background:#fee2e2;color:#991b1b;border-radius:6px;margin-bottom:8px}
 .sync-status{font-size:11px;color:#888;margin-top:4px;text-align:center}
+.barcode-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:1200;padding:18px;align-items:center;justify-content:center}
+.barcode-modal.open{display:flex}.barcode-box{background:#fff;border-radius:14px;padding:14px;width:100%;max-width:390px}.barcode-video{width:100%;border-radius:10px;background:#111;max-height:55vh}.scan-row{display:flex;gap:6px;align-items:end}.scan-row input{flex:1}.scan-btn{flex:0;padding:7px 10px;white-space:nowrap}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -112,12 +114,25 @@ textarea{resize:vertical;min-height:52px}
   <div class="lightbox-info" id="lightboxInfo"></div>
 </div>
 
+<!-- BARCODE / QR SCANNER -->
+<div class="barcode-modal" id="barcodeModal">
+  <div class="barcode-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:15px;font-weight:700">📷 Seriennummer scannen</div>
+      <button class="btn" style="flex:0;padding:5px 10px" onclick="stopBarcodeScanner()">✕</button>
+    </div>
+    <video id="barcodeVideo" class="barcode-video" playsinline></video>
+    <div id="barcodeStatus" style="font-size:12px;color:#666;margin-top:8px">Kamera wird gestartet…</div>
+    <button class="btn dan" style="width:100%;margin-top:10px" onclick="stopBarcodeScanner()">Abbrechen</button>
+  </div>
+</div>
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
     <div style="font-size:40px;margin-bottom:12px">⏱</div>
     <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit App</div>
-    <div style="font-size:13px;color:#888;margin-bottom:20px">v8 · Wallbox, Abschnitte, Session</div>
+    <div style="font-size:13px;color:#888;margin-bottom:20px">v11 · Notstromfähigkeit + Auftraggeber + Speicher-SNs + Prüfgeräte</div>
     <div id="userStep">
       <div id="userList"></div>
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0">
@@ -137,7 +152,7 @@ textarea{resize:vertical;min-height:52px}
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 8 · Wallbox + Abschnitte</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 11 · Notstromfähigkeit + Auftraggeber + Speicher-SNs + Prüfgeräte</div>
 </div>
 
 <!-- MAIN APP -->
@@ -360,12 +375,16 @@ textarea{resize:vertical;min-height:52px}
           <div class="met"><div class="ml">Wechselrichter</div><div class="mv b" id="dbCountWr">0</div></div>
         </div>
         <div class="m2">
+          <div class="met"><div class="ml">PV-Speicher</div><div class="mv b" id="dbCountSp">0</div></div>
           <div class="met"><div class="ml">Zählerschränke</div><div class="mv b" id="dbCountZsk">0</div></div>
-          <div class="met"><div class="ml">Wallboxen</div><div class="mv b" id="dbCountWb">0</div></div>
         </div>
         <div class="m2">
+          <div class="met"><div class="ml">Wallboxen</div><div class="mv b" id="dbCountWb">0</div></div>
           <div class="met"><div class="ml">Materialien</div><div class="mv b" id="dbCountMat">0</div></div>
+        </div>
+        <div class="m2">
           <div class="met"><div class="ml">Protokolle</div><div class="mv b" id="dbCountProt">0</div></div>
+          <div class="met"><div class="ml">Komponenten gesamt</div><div class="mv b" id="dbCountAll">0</div></div>
         </div>
       </div>
     </div>
@@ -404,6 +423,19 @@ textarea{resize:vertical;min-height:52px}
         <div class="r2">
           <div><span class="lbl">Nächster Prüftermin</span><input type="date" id="pNextDatum"></div>
           <div><span class="lbl">Verwendete Prüfgeräte</span><input type="text" id="pGeraete" placeholder="z.B. Benning PV 2"></div>
+        </div>
+      </div>
+
+      <div class="card" data-sect="allg">
+        <div class="sec">Auftraggeber</div>
+        <span class="lbl">Firma / Name</span><input type="text" id="pAuftraggeber" placeholder="z.B. Muster GmbH / Max Mustermann">
+        <div class="r2">
+          <div><span class="lbl">Straße / Nr.</span><input type="text" id="pAufStr"></div>
+          <div><span class="lbl">PLZ Ort</span><input type="text" id="pAufPlz"></div>
+        </div>
+        <div class="r2">
+          <div><span class="lbl">Telefon / Mobil</span><input type="text" id="pAufTel"></div>
+          <div><span class="lbl">E-Mail</span><input type="email" id="pAufMail"></div>
         </div>
       </div>
 
@@ -450,6 +482,11 @@ textarea{resize:vertical;min-height:52px}
           <div><span class="lbl">Einspeise-Zähler Nr.</span><input type="text" id="pAZaehler"></div>
           <div><span class="lbl">Zählerstand bei Übergabe</span><input type="text" id="pAZstand"></div>
         </div>
+        <span class="lbl">Notstromfähig</span>
+        <select id="pANotstrom">
+          <option value="nein">Nein</option>
+          <option value="ja">Ja</option>
+        </select>
       </div>
 
       <div class="card" data-sect="anlage" data-pv="1">
@@ -480,6 +517,25 @@ textarea{resize:vertical;min-height:52px}
         </div>
         <div id="wrRows"></div>
         <datalist id="dlWrHer"></datalist><datalist id="dlWrTyp"></datalist>
+      </div>
+
+      <div class="card" data-sect="anlage" data-pv="1">
+        <div class="sec">PV-Speicher / Batteriespeicher</div>
+        <div class="r2">
+          <div><span class="lbl">Hersteller</span><input type="text" id="pSpHer" list="dlSpHer"></div>
+          <div><span class="lbl">Typ</span><input type="text" id="pSpTyp" list="dlSpTyp" onchange="autofillKomp('speicher')"></div>
+        </div>
+        <datalist id="dlSpHer"></datalist><datalist id="dlSpTyp"></datalist>
+        <div class="r2">
+          <div><span class="lbl">Kapazität (kWh)</span><input type="number" step="0.1" id="pSpKwh"></div>
+          <div><span class="lbl">Anzahl</span><input type="number" id="pSpAnz" value="1"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 4px">
+          <span class="lbl" style="margin:0">Seriennummer(n) Speicher</span>
+          <button type="button" class="btn inf" style="flex:0;font-size:12px;padding:5px 10px" onclick="addSpSnRow()">+ Seriennummer</button>
+        </div>
+        <div id="spSnRows"></div>
+        <div style="font-size:10px;color:#999;margin-top:3px">Je Speicher/Batteriemodul eine Seriennummer. USB-/Bluetooth-Scanner oder Kamera-Scan möglich.</div>
       </div>
 
       <div class="card" data-sect="anlage">
@@ -527,6 +583,14 @@ textarea{resize:vertical;min-height:52px}
         <div id="chkWb"></div>
       </div>
 
+      <div class="card" data-sect="dc">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="sec" style="margin:0">Prüfgeräte — Besichtigung &amp; DC-Messung</div>
+          <button type="button" class="btn inf" style="flex:0;font-size:12px;padding:5px 10px" onclick="addPruefgeraetRow('dcPruefRows')">+ Prüfgerät</button>
+        </div>
+        <div id="dcPruefRows"></div>
+      </div>
+
       <div class="card" data-sect="dc" data-pv="1">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <div class="sec" style="margin:0">Strangmessungen (DC)</div>
@@ -547,6 +611,14 @@ textarea{resize:vertical;min-height:52px}
       <div class="card" data-sect="dc" data-pv="1">
         <div class="sec">Mechanische Installation</div>
         <div id="chkMech"></div>
+      </div>
+
+      <div class="card" data-sect="vde">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="sec" style="margin:0">Prüfgeräte — AC &amp; DIN VDE 0100-600</div>
+          <button type="button" class="btn inf" style="flex:0;font-size:12px;padding:5px 10px" onclick="addPruefgeraetRow('acPruefRows')">+ Prüfgerät</button>
+        </div>
+        <div id="acPruefRows"></div>
       </div>
 
       <div class="card" data-sect="vde">
@@ -646,6 +718,9 @@ textarea{resize:vertical;min-height:52px}
         <div style="font-size:11px;color:#888;margin-bottom:6px">Mit Finger oder Stift direkt im Feld unterschreiben.</div>
         <span class="lbl">Ort / Datum</span>
         <input type="text" id="pOrtDatum" placeholder="Leipzig, 06.07.2026">
+        <span class="lbl">Unterschrift Auftraggeber</span>
+        <div class="sig-wrap"><canvas id="sigAuftraggeber" class="sig-pad"></canvas>
+          <button class="btn dan sig-clear" onclick="clearSig('sigAuftraggeber')">✕</button></div>
         <span class="lbl">Unterschrift Betreiber / Kunde</span>
         <div class="sig-wrap"><canvas id="sigKunde" class="sig-pad"></canvas>
           <button class="btn dan sig-clear" onclick="clearSig('sigKunde')">✕</button></div>
@@ -820,7 +895,7 @@ var entries = [];
 var fotos = [];
 var baustellen = []; // {name, adresse, lat, lng, dat}
 var protokolle = []; // Prüf-/Abnahmeprotokolle nach DIN EN 62446
-var komponentenDB = {module:[],wr:[],zsk:[],material:[],wallbox:[]}; // wiederverwendbare Hersteller/Typen
+var komponentenDB = {module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]}; // wiederverwendbare Hersteller/Typen
 var firma = {name:'',str:'',plz:''};
 var currentUser = null;
 var currentMonth, currentYear;
@@ -1564,7 +1639,7 @@ function loadLocal(){
     if(data.timers)timers=data.timers;
     if(data.firma)firma=data.firma;
     if(Array.isArray(data.protokolle))protokolle=data.protokolle;
-    if(data.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],zsk:[],material:[],wallbox:[]},data.komponentenDB);
+    if(data.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},data.komponentenDB);
   }catch(err){}
 }
 function saveData(){
@@ -1619,7 +1694,7 @@ function initFirebase(){
         if(d.timers)timers=d.timers;
         if(d.firma)firma=d.firma;
         if(Array.isArray(d.protokolle))protokolle=d.protokolle;
-        if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],zsk:[],material:[],wallbox:[]},d.komponentenDB);
+        if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},d.komponentenDB);
         applyingSnapshot=false;
         cloudSynced=true;
         saveLocal();
@@ -1719,7 +1794,7 @@ var PROT_SECTS=[
 ];
 var currentProtSect='allg';
 var sigInited=false;
-var pendingSigs={k:'',e:''};
+var pendingSigs={a:'',k:'',e:''};
 function protTyp(){var t=document.getElementById('pTyp');return t?t.value:'pv';}
 function fillProtSectSel(){
   var s=document.getElementById('protSectSel');if(!s)return;
@@ -1738,8 +1813,8 @@ function showProtSect(sect){
   if(sect==='abschluss'&&!sigInited){
     sigInited=true;
     setTimeout(function(){
-      initSigPad('sigKunde');initSigPad('sigErrichter');
-      loadSig('sigKunde',pendingSigs.k);loadSig('sigErrichter',pendingSigs.e);
+      initSigPad('sigAuftraggeber');initSigPad('sigKunde');initSigPad('sigErrichter');
+      loadSig('sigAuftraggeber',pendingSigs.a);loadSig('sigKunde',pendingSigs.k);loadSig('sigErrichter',pendingSigs.e);
     },60);
   }
   window.scrollTo(0,0);
@@ -1897,6 +1972,29 @@ function collectKreise(){
   });
   return out;
 }
+// Speicher-Seriennummern
+function addSpSnRow(value){
+  var wrap=document.getElementById('spSnRows');if(!wrap)return;
+  var div=document.createElement('div');div.className='mat-row sp-sn-row';
+  div.innerHTML='<div class="scan-row" style="flex:1"><input type="text" class="sp-sn" autocomplete="off" placeholder="Seriennummer scannen oder eingeben" value="'+String(value||'').replace(/"/g,'&quot;')+'"><button type="button" class="btn inf scan-btn" onclick="scanBarcodeElement(this.previousElementSibling)">📷 Scan</button></div>'
+    +'<button type="button" class="btn dan" style="flex:0;padding:5px 8px;font-size:11px" onclick="this.closest(\'.sp-sn-row\').remove();if(!document.querySelector(\'#spSnRows .sp-sn-row\'))addSpSnRow()">✕</button>';
+  wrap.appendChild(div);
+}
+function collectSpSns(){
+  var out=[];document.querySelectorAll('#spSnRows .sp-sn').forEach(function(e){var v=e.value.trim();if(v)out.push(v);});return out;
+}
+// Frei erweiterbare Prüfgeräte je Prüfbereich
+function addPruefgeraetRow(containerId,d){
+  d=(typeof d==='string')?{name:d}:(d||{});var wrap=document.getElementById(containerId);if(!wrap)return;
+  var div=document.createElement('div');div.className='mat-row pruefgeraet-row';
+  div.innerHTML='<input type="text" class="pg-name" placeholder="Prüfgerät / Name, z.B. Benning PV 2" value="'+String(d.name||'').replace(/"/g,'&quot;')+'" style="flex:1;min-width:0">'
+    +'<button type="button" class="btn dan" style="flex:0;padding:5px 8px;font-size:11px" onclick="this.closest(\'.pruefgeraet-row\').remove()">✕</button>';
+  wrap.appendChild(div);
+}
+function collectPruefgeraete(containerId){
+  var out=[];document.querySelectorAll('#'+containerId+' .pg-name').forEach(function(e){var v=e.value.trim();if(v)out.push(v);});return out;
+}
+
 // Wechselrichter-Zeilen
 function addWrRow(d){
   d=d||{};
@@ -1911,7 +2009,7 @@ function addWrRow(d){
     +'<div><span class="lbl">Typ</span><input type="text" class="w-typ" list="dlWrTyp" value="'+(d.typ||'').replace(/"/g,'&quot;')+'"></div></div>'
     +'<div class="r2"><div><span class="lbl">AC-Nennleistung (W)</span><input type="number" class="w-w" value="'+(d.w||'')+'"></div>'
     +'<div><span class="lbl">Anzahl</span><input type="number" class="w-anz" value="'+(d.anz||1)+'"></div></div>'
-    +'<span class="lbl">Seriennummer(n)</span><input type="text" class="w-sn" value="'+(d.sn||'').replace(/"/g,'&quot;')+'">';
+    +'<span class="lbl">Seriennummer(n)</span><div class="scan-row"><input type="text" class="w-sn" autocomplete="off" value="'+(d.sn||'').replace(/"/g,'&quot;')+'"><button type="button" class="btn inf scan-btn" onclick="scanBarcodeElement(this.previousElementSibling)">📷 Scan</button></div>';
   div.querySelector('.w-typ').addEventListener('change',function(){
     var typ=this.value.trim();
     var rec=komponentenDB.wr.filter(function(k){return k.typ===typ;})[0];
@@ -2025,6 +2123,46 @@ function collectMaterial(){
   return out;
 }
 
+// ---- Barcode-/QR-Scanner für Seriennummern ----
+var barcodeTarget=null,barcodeStream=null,barcodeLoop=null;
+function scanBarcodeTo(id){var el=document.getElementById(id);if(el)scanBarcodeElement(el);}
+function scanBarcodeElement(el){
+  barcodeTarget=el;
+  if(!('BarcodeDetector' in window)||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    el.focus();
+    alert('Kamera-Barcode-Scan wird von diesem Browser nicht unterstützt. Ein USB-/Bluetooth-Barcodescanner funktioniert trotzdem: Cursor ins Seriennummernfeld setzen und scannen.');
+    return;
+  }
+  var modal=document.getElementById('barcodeModal'),video=document.getElementById('barcodeVideo'),status=document.getElementById('barcodeStatus');
+  modal.classList.add('open');status.textContent='Kamera wird gestartet…';
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}).then(function(stream){
+    barcodeStream=stream;video.srcObject=stream;return video.play();
+  }).then(function(){
+    var detector=new BarcodeDetector({formats:['code_128','code_39','code_93','ean_13','ean_8','upc_a','upc_e','itf','codabar','qr_code','data_matrix']});
+    status.textContent='Barcode oder QR-Code vor die Kamera halten…';
+    function tick(){
+      if(!barcodeStream)return;
+      detector.detect(video).then(function(codes){
+        if(codes&&codes.length){
+          var val=(codes[0].rawValue||'').trim();
+          if(val&&barcodeTarget){barcodeTarget.value=val;barcodeTarget.dispatchEvent(new Event('input',{bubbles:true}));barcodeTarget.dispatchEvent(new Event('change',{bubbles:true}));queueProtDraft();stopBarcodeScanner();return;}
+        }
+        barcodeLoop=requestAnimationFrame(tick);
+      }).catch(function(){barcodeLoop=requestAnimationFrame(tick);});
+    }
+    tick();
+  }).catch(function(err){
+    status.textContent='Kamera konnte nicht geöffnet werden.';setTimeout(stopBarcodeScanner,1200);
+  });
+}
+function stopBarcodeScanner(){
+  if(barcodeLoop)cancelAnimationFrame(barcodeLoop);barcodeLoop=null;
+  if(barcodeStream){barcodeStream.getTracks().forEach(function(t){t.stop();});barcodeStream=null;}
+  var video=document.getElementById('barcodeVideo');if(video)video.srcObject=null;
+  var modal=document.getElementById('barcodeModal');if(modal)modal.classList.remove('open');
+  if(barcodeTarget)barcodeTarget.focus();barcodeTarget=null;
+}
+
 // ---- Komponenten-DB (Autocomplete + Autofill) ----
 function fillDatalists(){
   function fill(id,arr){var dl=document.getElementById(id);if(dl)dl.innerHTML=arr.map(function(v){return '<option value="'+String(v).replace(/"/g,'&quot;')+'">';}).join('');}
@@ -2033,6 +2171,8 @@ function fillDatalists(){
   fill('dlModTyp',uniq(komponentenDB.module.map(function(k){return k.typ;})));
   fill('dlWrHer',uniq(komponentenDB.wr.map(function(k){return k.hersteller;})));
   fill('dlWrTyp',uniq(komponentenDB.wr.map(function(k){return k.typ;})));
+  fill('dlSpHer',uniq((komponentenDB.speicher||[]).map(function(k){return k.hersteller;})));
+  fill('dlSpTyp',uniq((komponentenDB.speicher||[]).map(function(k){return k.typ;})));
   fill('dlZskHer',uniq(komponentenDB.zsk.map(function(k){return k.hersteller;})));
   fill('dlZskTyp',uniq(komponentenDB.zsk.map(function(k){return k.typ;})));
   fill('dlWbHer',uniq((komponentenDB.wallbox||[]).map(function(k){return k.hersteller;})));
@@ -2042,7 +2182,7 @@ function fillDatalists(){
   fill('dlProtBaustellen',bs);
 }
 function autofillKomp(art){
-  var typEl={module:'pModTyp',zsk:'pZskTyp',wallbox:'pWbTyp'}[art];
+  var typEl={module:'pModTyp',speicher:'pSpTyp',zsk:'pZskTyp',wallbox:'pWbTyp'}[art];
   var typ=document.getElementById(typEl).value.trim();
   var rec=komponentenDB[art].filter(function(k){return k.typ===typ;})[0];
   if(!rec)return;
@@ -2053,6 +2193,9 @@ function autofillKomp(art){
     if(rec.uoc)document.getElementById('pModUoc').value=rec.uoc;
     if(rec.impp)document.getElementById('pModImpp').value=rec.impp;
     if(rec.umpp)document.getElementById('pModUmpp').value=rec.umpp;
+  }else if(art==='speicher'){
+    document.getElementById('pSpHer').value=rec.hersteller||'';
+    if(rec.kwh)document.getElementById('pSpKwh').value=rec.kwh;
   }else if(art==='wallbox'){
     document.getElementById('pWbHer').value=rec.hersteller||'';
     if(rec.kw)document.getElementById('pWbKw').value=rec.kw;
@@ -2068,6 +2211,8 @@ function upsertKomponenten(p){
   }
   up(komponentenDB.module,{hersteller:p.mod.her,typ:p.mod.typ,wp:p.mod.wp,isc:p.mod.isc,uoc:p.mod.uoc,impp:p.mod.impp,umpp:p.mod.umpp});
   (p.wrs||[]).forEach(function(w){up(komponentenDB.wr,{hersteller:w.her,typ:w.typ,w:w.w});});
+  if(!komponentenDB.speicher)komponentenDB.speicher=[];
+  if(p.speicher&&(p.speicher.her||p.speicher.typ))up(komponentenDB.speicher,{hersteller:p.speicher.her,typ:p.speicher.typ,kwh:p.speicher.kwh});
   up(komponentenDB.zsk,{hersteller:p.zsk.her,typ:p.zsk.typ});
   if(!komponentenDB.wallbox)komponentenDB.wallbox=[];
   if(p.wb&&(p.wb.her||p.wb.typ))up(komponentenDB.wallbox,{hersteller:p.wb.her,typ:p.wb.typ,kw:p.wb.kw});
@@ -2116,15 +2261,19 @@ function renderProtokollListe(){
   document.getElementById('protCount').textContent=protokolle.length;
   document.getElementById('dbCountMod').textContent=komponentenDB.module.length;
   document.getElementById('dbCountWr').textContent=komponentenDB.wr.length;
+  document.getElementById('dbCountSp').textContent=(komponentenDB.speicher||[]).length;
   document.getElementById('dbCountZsk').textContent=komponentenDB.zsk.length;
   document.getElementById('dbCountMat').textContent=komponentenDB.material.length;
   document.getElementById('dbCountWb').textContent=(komponentenDB.wallbox||[]).length;
   document.getElementById('dbCountProt').textContent=protokolle.length;
+  var allDb=komponentenDB.module.length+komponentenDB.wr.length+(komponentenDB.speicher||[]).length+komponentenDB.zsk.length+(komponentenDB.wallbox||[]).length+komponentenDB.material.length;
+  var allEl=document.getElementById('dbCountAll');if(allEl)allEl.textContent=allDb;
   var db=document.getElementById('protDraftBanner');
   if(db)db.style.display=localStorage.getItem('az_prot_draft')?'block':'none';
   if(!protokolle.length){el.innerHTML='<div style="color:#888;font-size:13px;padding:16px 0;text-align:center">Noch keine Protokolle.<br>Tippe auf „+ Neues Protokoll".</div>';return;}
   el.innerHTML=protokolle.map(function(p,i){
-    var sig=(p.sigKunde&&p.sigErrichter)?'<span class="bdg g">✓ unterschrieben</span>':'<span class="bdg a">Unterschrift offen</span>';
+    var auftragOk=!p.auftraggeber||!!p.sigAuftraggeber;
+    var sig=(auftragOk&&p.sigKunde&&p.sigErrichter)?'<span class="bdg g">✓ unterschrieben</span>':'<span class="bdg a">Unterschrift offen</span>';
     var erg=p.ergebnis==='mit'?'<span class="bdg r">Mängel</span>':'<span class="bdg g">o. Mängel</span>';
     return '<div class="ent" style="cursor:pointer" onclick="editProtokoll('+i+')">'
       +'<div class="edot" style="background:'+(p.ergebnis==='mit'?'#dc2626':'#16a34a')+'"></div>'
@@ -2159,6 +2308,9 @@ function openProtokollForm(p){
   document.getElementById('wrRows').innerHTML='';
   document.getElementById('ausrRows').innerHTML='';
   document.getElementById('kreisRows').innerHTML='';
+  document.getElementById('spSnRows').innerHTML='';
+  document.getElementById('dcPruefRows').innerHTML='';
+  document.getElementById('acPruefRows').innerHTML='';
   var set=function(id,v){var e=document.getElementById(id);if(e)e.value=v==null?'':v;};
   if(p){
     set('pNr',p.nr);set('pDatum',p.datum);set('pArt',p.art||'erst');set('pBaustelle',p.baustelle);
@@ -2166,13 +2318,14 @@ function openProtokollForm(p){
     set('pKName',p.kunde.name);set('pKStr',p.kunde.str);set('pKPlz',p.kunde.plz);set('pKTel',p.kunde.tel);set('pKMail',p.kunde.mail);
     set('pEName',p.errichter.name);set('pEStr',p.errichter.str);set('pEPlz',p.errichter.plz);set('pETel',p.errichter.tel);set('pEMail',p.errichter.mail);
     set('pAStandort',p.anlage.standort);
-    set('pAInb',p.anlage.inb);set('pAKwp',p.anlage.kwp);set('pAZaehler',p.anlage.zaehler);set('pAZstand',p.anlage.zstand);
+    set('pAInb',p.anlage.inb);set('pAKwp',p.anlage.kwp);set('pAZaehler',p.anlage.zaehler);set('pAZstand',p.anlage.zstand);set('pANotstrom',p.anlage.notstrom||'nein');
     set('pModHer',p.mod.her);set('pModTyp',p.mod.typ);set('pModWp',p.mod.wp);set('pModAnz',p.mod.anz);
     set('pModIsc',p.mod.isc);set('pModUoc',p.mod.uoc);set('pModImpp',p.mod.impp);set('pModUmpp',p.mod.umpp);
     var wrs=p.wrs&&p.wrs.length?p.wrs:(p.wr&&(p.wr.her||p.wr.typ)?[p.wr]:[{}]);
     wrs.forEach(function(w){addWrRow(w);});
     var ausrs=p.ausrichtungen&&p.ausrichtungen.length?p.ausrichtungen:((p.anlage.ausr||p.anlage.neig)?[{ausr:p.anlage.ausr,neig:p.anlage.neig}]:[{}]);
     ausrs.forEach(function(a){addAusrRow(a);});
+    var spo=p.speicher||{};set('pSpHer',spo.her);set('pSpTyp',spo.typ);set('pSpKwh',spo.kwh);set('pSpAnz',spo.anz||1);var sns=(spo.sns&&spo.sns.length)?spo.sns:(spo.sn?[spo.sn]:['']);sns.forEach(function(sn){addSpSnRow(sn);});
     set('pZskHer',p.zsk.her);set('pZskTyp',p.zsk.typ);
     set('pTyp',p.typ||'pv');
     var wbo=p.wb||{};
@@ -2184,7 +2337,8 @@ function openProtokollForm(p){
     set('pNetz',p.ac.netz||'TN-C-S');set('pNetzbetreiber',p.ac.betreiber);set('pRcd',p.ac.rcd);set('pRcdMs',p.ac.rcdMs);
     set('pSchutzl',p.ac.schutzl);set('pRe',p.ac.re);set('pRisoAc',p.ac.riso);set('pZs',p.ac.zs);
     set('pZusatz',p.zusatz);set('pErgebnis',p.ergebnis||'ohne');set('pMaengel',p.maengel);set('pBemerk',p.bemerk);
-    set('pOrtDatum',p.ortDatum);
+    set('pOrtDatum',p.ortDatum);var auf=p.auftraggeberData||{};set('pAuftraggeber',auf.name||p.auftraggeber||'');set('pAufStr',auf.str||'');set('pAufPlz',auf.plz||'');set('pAufTel',auf.tel||'');set('pAufMail',auf.mail||'');
+    var pg=p.pruefgeraete||{};(pg.dc&&pg.dc.length?pg.dc:['']).forEach(function(x){addPruefgeraetRow('dcPruefRows',x);});(pg.ac&&pg.ac.length?pg.ac:['']).forEach(function(x){addPruefgeraetRow('acPruefRows',x);});
     document.getElementById('pRegeln').checked=!!p.regeln;
     document.getElementById('pFotosInPdf').checked=p.fotosInPdf!==false;
     (p.strings&&p.strings.length?p.strings:[{}]).forEach(function(s){addStringRow(s);});
@@ -2197,13 +2351,14 @@ function openProtokollForm(p){
     ['pNr','pBaustelle','pNextDatum','pGeraete','pKName','pKStr','pKPlz','pKTel','pKMail',
      'pAStandort','pAInb','pAZaehler','pAZstand','pAKwp',
      'pModHer','pModTyp','pModWp','pModAnz','pModIsc','pModUoc','pModImpp','pModUmpp',
-     'pZskHer','pZskTyp','pVerteiler','pWbHer','pWbTyp','pWbSn','pWbKw','pWbZuleitung',
+     'pSpHer','pSpTyp','pSpKwh','pZskHer','pZskTyp','pVerteiler','pWbHer','pWbTyp','pWbSn','pWbKw','pWbZuleitung',
      'pNetzbetreiber','pRcd','pRcdMs','pSchutzl','pRe','pRisoAc','pZs',
      'pZusatz','pMaengel','pBemerk'].forEach(function(id){set(id,'');});
+    set('pSpAnz','1');set('pANotstrom','nein');set('pAuftraggeber','');set('pAufStr','');set('pAufPlz','');set('pAufTel','');set('pAufMail','');
     set('pDatum',todayStr());set('pArt','erst');set('pErgebnis','ohne');set('pNetz','TN-C-S');
     set('pTyp','pv');set('pWbPhasen','3-phasig');set('pWbAnschluss','Festanschluss');
     set('pWbRcd','RCD Typ A + DC-Fehlerstromüberwachung 6 mA (intern)');set('pWbAnmeldung','offen');
-    addWrRow();addAusrRow();addKreisRow();
+    addWrRow();addAusrRow();addKreisRow();addSpSnRow();addPruefgeraetRow('dcPruefRows');addPruefgeraetRow('acPruefRows');
     renderVde({});
     document.getElementById('pRegeln').checked=false;
     document.getElementById('pFotosInPdf').checked=true;
@@ -2217,7 +2372,7 @@ function openProtokollForm(p){
   toggleMaengel();
   protFotoCount();
   sigInited=false;sigPads={};
-  pendingSigs={k:(p&&p.sigKunde)||'',e:(p&&p.sigErrichter)||''};
+  pendingSigs={a:(p&&p.sigAuftraggeber)||'',k:(p&&p.sigKunde)||'',e:(p&&p.sigErrichter)||''};
   fillProtSectSel();
   showProtSect('allg');
   window.scrollTo(0,0);
@@ -2246,12 +2401,14 @@ function buildProtFromForm(){
     typ:g('pTyp')||'pv',
     nr:g('pNr'),datum:g('pDatum'),art:g('pArt'),baustelle:g('pBaustelle'),
     nextDatum:g('pNextDatum'),geraete:g('pGeraete'),
+    pruefgeraete:{dc:collectPruefgeraete('dcPruefRows'),ac:collectPruefgeraete('acPruefRows')},
     kunde:{name:g('pKName'),str:g('pKStr'),plz:g('pKPlz'),tel:g('pKTel'),mail:g('pKMail')},
     errichter:{name:g('pEName'),str:g('pEStr'),plz:g('pEPlz'),tel:g('pETel'),mail:g('pEMail')},
-    anlage:{standort:g('pAStandort'),inb:g('pAInb'),kwp:g('pAKwp'),zaehler:g('pAZaehler'),zstand:g('pAZstand')},
+    anlage:{standort:g('pAStandort'),inb:g('pAInb'),kwp:g('pAKwp'),zaehler:g('pAZaehler'),zstand:g('pAZstand'),notstrom:g('pANotstrom')||'nein'},
     ausrichtungen:collectAusr(),
     mod:{her:g('pModHer'),typ:g('pModTyp'),wp:g('pModWp'),anz:g('pModAnz'),isc:g('pModIsc'),uoc:g('pModUoc'),impp:g('pModImpp'),umpp:g('pModUmpp')},
     wrs:collectWrs(),
+    speicher:{her:g('pSpHer'),typ:g('pSpTyp'),kwh:g('pSpKwh'),anz:g('pSpAnz'),sns:collectSpSns(),sn:(collectSpSns()[0]||'')},
     zsk:{her:g('pZskHer'),typ:g('pZskTyp')},
     wb:{her:g('pWbHer'),typ:g('pWbTyp'),sn:g('pWbSn'),kw:g('pWbKw'),phasen:g('pWbPhasen'),anschluss:g('pWbAnschluss'),zuleitung:g('pWbZuleitung'),rcd:g('pWbRcd'),anmeldung:g('pWbAnmeldung')},
     strings:collectStrings(),
@@ -2264,6 +2421,9 @@ function buildProtFromForm(){
     regeln:document.getElementById('pRegeln').checked,
     fotosInPdf:document.getElementById('pFotosInPdf').checked,
     ortDatum:g('pOrtDatum'),
+    auftraggeber:g('pAuftraggeber'),
+    auftraggeberData:{name:g('pAuftraggeber'),str:g('pAufStr'),plz:g('pAufPlz'),tel:g('pAufTel'),mail:g('pAufMail')},
+    sigAuftraggeber:sigDataURL('sigAuftraggeber')||pendingSigs.a||'',
     sigKunde:sigDataURL('sigKunde')||pendingSigs.k||'',
     sigErrichter:sigDataURL('sigErrichter')||pendingSigs.e||''
   };
@@ -2329,8 +2489,10 @@ function buildProtokollPDF(p,pf,imgs){
   doc.text((isWb?'gemäß DIN VDE 0100-600 / DIN VDE 0100-722':'gemäß DIN EN 62446 (VDE 0126-23)')+'  ·  Prüfbericht Nr. '+(p.nr||'—')+'  ·  '+(p.art==='wieder'?'Wiederholungsprüfung':'Erstprüfung'),M,y);
   doc.text('Erstellt am '+new Date().toLocaleDateString('de-DE'),PW-M,y,{align:'right'});
   y+=6;
-  h2('Betreiber (Kunde) / Errichter');
+  h2('Auftraggeber / Betreiber (Kunde) / Errichter');
+  var auf=p.auftraggeberData||{name:p.auftraggeber||''};
   kv([
+    ['Auftraggeber',(auf.name||'')+(auf.str?', '+auf.str:'')+(auf.plz?', '+auf.plz:'')+(auf.tel?' · '+auf.tel:'')+(auf.mail?' · '+auf.mail:'')],
     ['Betreiber',(p.kunde.name||'')+(p.kunde.str?', '+p.kunde.str:'')+(p.kunde.plz?', '+p.kunde.plz:'')+(p.kunde.tel?' · '+p.kunde.tel:'')+(p.kunde.mail?' · '+p.kunde.mail:'')],
     ['Errichter',(p.errichter.name||'')+(p.errichter.str?', '+p.errichter.str:'')+(p.errichter.plz?', '+p.errichter.plz:'')+(p.errichter.tel?' · '+p.errichter.tel:'')+(p.errichter.mail?' · '+p.errichter.mail:'')],
     ['Baustelle / Standort',(p.baustelle||'')+(p.anlage.standort?' — '+p.anlage.standort:'')],
@@ -2342,7 +2504,8 @@ function buildProtokollPDF(p,pf,imgs){
     ['Inbetriebnahme',fmtDateDE(p.anlage.inb)||'—'],
     ['Installierte Leistung',(p.anlage.kwp?p.anlage.kwp+' kWp':'—')],
     ['Ausrichtungen',(p.ausrichtungen&&p.ausrichtungen.length?p.ausrichtungen.map(function(a){return a.ausr+(a.neig?' / '+a.neig:'')+(a.anz?' ('+a.anz+' Module)':'');}).join('  ·  '):((p.anlage.ausr||'')+(p.anlage.neig?' / '+p.anlage.neig:''))||'—')],
-    ['Einspeise-Zähler','Nr. '+(p.anlage.zaehler||'—')+(p.anlage.zstand?'   ·   Zählerstand bei Übergabe: '+p.anlage.zstand:'')]
+    ['Einspeise-Zähler','Nr. '+(p.anlage.zaehler||'—')+(p.anlage.zstand?'   ·   Zählerstand bei Übergabe: '+p.anlage.zstand:'')],
+    ['Notstromfähig',(p.anlage.notstrom==='ja'?'Ja':'Nein')]
   ]);
   h2('Komponenten');
   var kompRows=[];
@@ -2353,9 +2516,13 @@ function buildProtokollPDF(p,pf,imgs){
   }else{
     kompRows.push(['PV-Module',(p.mod.her||'')+' '+(p.mod.typ||'')+(p.mod.wp?' · '+p.mod.wp+' Wp':'')+(p.mod.anz?' · '+p.mod.anz+' Stk':'')+(p.mod.uoc?' · Uoc '+p.mod.uoc+' V':'')+(p.mod.isc?' · Isc '+p.mod.isc+' A':'')+(p.mod.umpp?' · Umpp '+p.mod.umpp+' V':'')+(p.mod.impp?' · Impp '+p.mod.impp+' A':'')]);
     kompRows.push(['Wechselrichter',(function(){var l=p.wrs&&p.wrs.length?p.wrs:(p.wr?[p.wr]:[]);return l.map(function(w,i2){return 'WR'+(i2+1)+': '+(w.her||'')+' '+(w.typ||'')+(w.w?' · '+w.w+' W':'')+(w.anz?' · '+w.anz+' Stk':'')+(w.sn?' · SN: '+w.sn:'');}).join('\n')||'—';})()]);
+    var sp=p.speicher||{};var spSns=(sp.sns&&sp.sns.length)?sp.sns:(sp.sn?[sp.sn]:[]);kompRows.push(['PV-Speicher',(sp.her||sp.typ||spSns.length)?((sp.her||'')+' '+(sp.typ||'')+(sp.kwh?' · '+sp.kwh+' kWh':'')+(sp.anz?' · '+sp.anz+' Stk':'')+(spSns.length?' · SN: '+spSns.join(', '):'')):'—']);
   }
   kompRows.push(['Zählerschrank',(p.zsk.her||'')+' '+(p.zsk.typ||'')||'—']);
   kv(kompRows);
+  // Prüfgeräte je Prüfbereich
+  var pg=p.pruefgeraete||{};
+  if(pg.dc&&pg.dc.length){h2('Prüfgeräte — Besichtigung & DC-Messung');kv(pg.dc.map(function(x,i){return ['Prüfgerät '+(i+1),x];}));}
   // Strangmessungen
   if(!isWb&&p.strings&&p.strings.length){
     h2('Strangmessungen (DC)');
@@ -2382,6 +2549,8 @@ function buildProtokollPDF(p,pf,imgs){
     chkTable('AC-Seite / Kennzeichnung',CHK_AC);
     chkTable('Mechanische Installation',CHK_MECH);
   }
+  // Prüfgeräte AC / DIN VDE 0100-600
+  if(pg.ac&&pg.ac.length){h2('Prüfgeräte — AC & DIN VDE 0100-600');kv(pg.ac.map(function(x,i){return ['Prüfgerät '+(i+1),x];}));}
   // DIN VDE 0100-600
   var v=p.vde||{bes:{},erp:{},pa:{},kreise:[]};
   function triTable(title,list,vals){
@@ -2464,22 +2633,25 @@ function buildProtokollPDF(p,pf,imgs){
       y+=rowH+8;
     }
   }
-  // Abnahme + beidseitige Unterschrift
-  nl(52);
+  // Abnahme + Auftraggeber / Betreiber / Errichter
+  nl(58);
   h2('Abnahme');
   doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(40,40,40);
-  var abnT=doc.splitTextToSize('Der Betreiber bestätigt mit seiner Unterschrift die Abnahme der oben beschriebenen Anlage'+(p.ergebnis==='mit'?' unter Vorbehalt der aufgeführten Mängel':'')+'. Der Errichter bestätigt, dass die Arbeiten nach bestem Wissen und den anerkannten Regeln der Technik ausgeführt wurden. (Die Haftung des Unterzeichnenden ist auf die oben beschriebenen Arbeiten beschränkt.)',PW-2*M);
+  var abnT=doc.splitTextToSize('Der Auftraggeber bzw. Betreiber bestätigt mit seiner Unterschrift die Abnahme der oben beschriebenen Anlage'+(p.ergebnis==='mit'?' unter Vorbehalt der aufgeführten Mängel':'')+'. Der Errichter bestätigt, dass die Arbeiten nach bestem Wissen und den anerkannten Regeln der Technik ausgeführt wurden. (Die Haftung des Unterzeichnenden ist auf die oben beschriebenen Arbeiten beschränkt.)',PW-2*M);
   doc.text(abnT,M,y);y+=abnT.length*3.6+4;
   doc.text('Ort / Datum: '+(p.ortDatum||''),M,y);y+=4;
-  var sw=72,sh=22;
-  if(p.sigKunde){try{doc.addImage(p.sigKunde,'JPEG',M,y,sw,sh);}catch(e){}}
-  if(p.sigErrichter){try{doc.addImage(p.sigErrichter,'JPEG',PW-M-sw,y,sw,sh);}catch(e){}}
+  var gap=5,sw=(PW-2*M-2*gap)/3,sh=20;
+  var sx1=M,sx2=M+sw+gap,sx3=M+2*(sw+gap);
+  if(p.sigAuftraggeber){try{doc.addImage(p.sigAuftraggeber,'JPEG',sx1,y,sw,sh);}catch(e){}}
+  if(p.sigKunde){try{doc.addImage(p.sigKunde,'JPEG',sx2,y,sw,sh);}catch(e){}}
+  if(p.sigErrichter){try{doc.addImage(p.sigErrichter,'JPEG',sx3,y,sw,sh);}catch(e){}}
   y+=sh+2;
   doc.setDrawColor(120,120,120);doc.setLineWidth(0.2);
-  doc.line(M,y,M+sw,y);doc.line(PW-M-sw,y,PW-M,y);
-  doc.setFontSize(7.5);doc.setTextColor(110,110,110);
-  doc.text('Unterschrift Betreiber / Kunde',M,y+4);
-  doc.text('Unterschrift Errichter / Prüfer',PW-M-sw,y+4);
+  doc.line(sx1,y,sx1+sw,y);doc.line(sx2,y,sx2+sw,y);doc.line(sx3,y,sx3+sw,y);
+  doc.setFontSize(7);doc.setTextColor(110,110,110);
+  doc.text('Auftraggeber'+(p.auftraggeber?' · '+p.auftraggeber.substring(0,26):''),sx1,y+4);
+  doc.text('Betreiber / Kunde',sx2,y+4);
+  doc.text('Errichter / Prüfer',sx3,y+4);
   doc.save('Pruefprotokoll_'+(p.nr||p.baustelle||'PV').replace(/[^\w-]+/g,'_')+'.pdf');
 }
 
