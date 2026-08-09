@@ -10,6 +10,9 @@ body{background:#f5f5f5;color:#111;max-width:420px;margin:0 auto;min-height:100v
 .nav{display:flex;background:#fff;border-bottom:1px solid #e5e5e5;position:sticky;top:0;z-index:10}
 .nb{flex:1;padding:9px 2px 7px;font-size:10px;background:none;border:none;border-bottom:2px solid transparent;color:#888;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
 .nb.active{color:#111;border-bottom-color:#111;font-weight:600}
+.more-menu{position:absolute;top:100%;right:0;background:#fff;border:1px solid #e5e5e5;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.12);z-index:30;min-width:170px;padding:6px;margin-top:4px}
+.more-item{display:block;width:100%;text-align:left;background:none;border:none;padding:10px 12px;font-size:13px;color:#111;border-radius:8px;cursor:pointer}
+.more-item:hover{background:#f5f5f5}
 .tab{display:none;padding:12px 12px 30px}.tab.active{display:block}
 .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-bottom:10px}
 .m2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
@@ -150,9 +153,14 @@ textarea{resize:vertical;min-height:52px}
     <button class="nb" onclick="gotoTab('eintrag')">➕<br>Eintrag</button>
     <button class="nb" onclick="gotoTab('fotos')">📸<br>Fotos</button>
     <button class="nb" onclick="gotoTab('monat')">📅<br>Monat</button>
-    <button class="nb" onclick="gotoTab('protokoll')">📋<br>Protokoll</button>
-    <button class="nb agOnly" onclick="gotoTab('ag')" style="display:none">🏢<br>Arbeitgeber</button>
     <button class="nb" onclick="gotoTab('profil')">👤<br>Profil</button>
+    <div style="flex:1;position:relative">
+      <button class="nb" id="moreBtn" onclick="toggleMoreMenu(event)">⋮<br>Mehr</button>
+      <div id="moreMenu" class="more-menu" style="display:none">
+        <button class="more-item" onclick="gotoTabFromMenu('protokoll')">📋 Protokoll</button>
+        <button class="more-item agOnly" onclick="gotoTabFromMenu('ag')" style="display:none">🏢 Arbeitgeber</button>
+      </div>
+    </div>
   </div>
 
   <!-- HEUTE -->
@@ -1094,15 +1102,32 @@ function initApp(){
 
 // ============ TABS ============
 function gotoTab(id){
+  closeMoreMenu();
   ['heute','eintrag','fotos','monat','protokoll','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('active');});
   var tel=document.getElementById('tab-'+id);if(tel)tel.classList.add('active');
-  document.querySelectorAll('.nb').forEach(function(b){if(b.textContent.indexOf({heute:'Heute',eintrag:'Eintrag',fotos:'Fotos',monat:'Monat',protokoll:'Protokoll',ag:'Arbeitgeber',profil:'Profil'}[id]||'')>=0)b.classList.add('active');});
+  document.querySelectorAll('.nb').forEach(function(b){if(b.textContent.indexOf({heute:'Heute',eintrag:'Eintrag',fotos:'Fotos',monat:'Monat',profil:'Profil'}[id]||'')>=0)b.classList.add('active');});
+  if(id==='protokoll'||id==='ag'){var mb=document.getElementById('moreBtn');if(mb)mb.classList.add('active');}
   if(id==='monat')renderMonth();
   if(id==='fotos')renderGalerie();
   if(id==='protokoll'){renderProtokollListe();fillDatalists();}
   if(id==='profil')updateUrlaubKonto();
 }
+function gotoTabFromMenu(id){closeMoreMenu();gotoTab(id);}
+function toggleMoreMenu(e){
+  if(e)e.stopPropagation();
+  var m=document.getElementById('moreMenu');
+  if(!m)return;
+  m.style.display=(m.style.display==='none'||!m.style.display)?'block':'none';
+}
+function closeMoreMenu(){
+  var m=document.getElementById('moreMenu');if(m)m.style.display='none';
+}
+document.addEventListener('click',function(e){
+  var m=document.getElementById('moreMenu');
+  if(!m||m.style.display==='none')return;
+  if(!m.contains(e.target)&&e.target.id!=='moreBtn'&&!(e.target.closest&&e.target.closest('#moreBtn')))closeMoreMenu();
+});
 
 // ============ TIMER ============
 function getSoll(){if(isAG())return 7;var ma=employees[activeMaIdx()];return ma?ma.soll:7;}
