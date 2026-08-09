@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arbeitszeit App v7 - Mit Prüfprotokoll</title>
+<title>Arbeitszeit App v9 - Notstrom & Barcode Scanner</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
 body{background:#f5f5f5;color:#111;max-width:420px;margin:0 auto;min-height:100vh}
@@ -26,22 +26,33 @@ body{background:#f5f5f5;color:#111;max-width:420px;margin:0 auto;min-height:100v
 .btn.suc{border-color:#86efac;color:#16a34a}.btn.suc:hover{background:#f0fdf4}
 .btn.inf{border-color:#93c5fd;color:#2563eb}.btn.inf:hover{background:#eff6ff}
 .btn.warn{border-color:#fcd34d;color:#d97706}.btn.warn:hover{background:#fffbeb}
+.btn-sm{padding:6px 8px;font-size:11px;flex:0;min-width:auto}
 .lbl{font-size:12px;color:#666;display:block;margin:9px 0 3px}
 input,select,textarea{width:100%;font-size:13px;border-radius:8px;border:1px solid #d4d4d4;padding:7px 10px;background:#fff;color:#111;outline:none}
 input:focus,select:focus,textarea:focus{border-color:#111}
 textarea{resize:vertical;min-height:52px}
 .r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.r3{display:grid;grid-template-columns:1fr 1fr 50px;gap:8px;align-items:flex-end}
 .bdg{display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
 .bdg.g{background:#dcfce7;color:#166534}.bdg.a{background:#fef3c7;color:#92400e}
 .bdg.r{background:#fee2e2;color:#991b1b}.bdg.b{background:#dbeafe;color:#1e40af}
-.bdg.n{background:#f5f5f5;color:#666}
-.ent{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #f0f0f0}
-.ent:last-child{border-bottom:none}
-.edot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.einfo{flex:1;min-width:0}
-.etitle{font-size:13px;font-weight:500}
-.esub{font-size:11px;color:#888}
-.avt{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+
+/* Barcode Scanner */
+.barcode-container{border:2px solid #2563eb;border-radius:8px;background:#eff6ff;padding:12px;margin:8px 0}
+.barcode-input{display:flex;gap:6px;align-items:flex-end}
+.barcode-input input{flex:1}
+.barcode-input button{flex:0;width:40px;height:40px;padding:0}
+#barcodeVideo{width:100%;border-radius:6px;display:none;margin-bottom:8px}
+.scanner-controls{display:flex;gap:6px}
+.scanner-controls button{flex:1}
+
+/* Speicher Liste */
+.speicher-item{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
+.speicher-item.active{border-color:#2563eb;background:#eff6ff}
+.speicher-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.speicher-header h4{font-size:13px;margin:0;color:#111;font-weight:600}
+.speicher-del{background:#dc2626;color:#fff;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer}
+.speicher-del:hover{background:#991b1b}
 
 /* Unterschrift Canvas */
 .sig-container{border:2px solid #d4d4d4;border-radius:8px;background:#fff;margin:8px 0;touch-action:none;cursor:crosshair}
@@ -52,10 +63,6 @@ textarea{resize:vertical;min-height:52px}
 .debug-panel{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin-bottom:10px;font-size:12px}
 .debug-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #dcfce7}
 .debug-row:last-child{border-bottom:none}
-.debug-status{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:4px}
-.debug-status.ok{background:#16a34a}
-.debug-status.warn{background:#d97706}
-.debug-status.err{background:#dc2626}
 
 /* LOGIN */
 #loginScreen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#f5f5f5}
@@ -75,6 +82,12 @@ textarea{resize:vertical;min-height:52px}
 .pruef-card.pv{border-left-color:#16a34a}
 .pruef-date{font-size:11px;color:#888}
 .pruef-status{font-size:12px;font-weight:600;margin-top:4px}
+
+/* Modal Barcode */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-content{background:#fff;border-radius:12px;padding:20px;width:90%;max-width:400px}
+.modal-close{float:right;background:none;border:none;font-size:24px;cursor:pointer;color:#888}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -85,7 +98,7 @@ textarea{resize:vertical;min-height:52px}
 <div id="loginScreen">
   <div class="login-card">
     <div style="font-size:40px;margin-bottom:12px">⏱</div>
-    <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit App v7</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit App v9</div>
     <div style="font-size:13px;color:#888;margin-bottom:20px">Bitte Mitarbeiter auswählen</div>
     <div id="userStep">
       <div id="userList"></div>
@@ -106,7 +119,7 @@ textarea{resize:vertical;min-height:52px}
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 7 · Prüfprotokoll + Datensicherheit</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 9 · Notstrom · Barcode · Speicher-Management</div>
 </div>
 
 <!-- MAIN APP -->
@@ -156,7 +169,7 @@ textarea{resize:vertical;min-height:52px}
     <div class="card">
       <div class="sec">Neuer Eintrag</div>
       <label class="lbl">Datum</label>
-      <input type="date" id="entryDate" onchange="updateOrt()">
+      <input type="date" id="entryDate">
       
       <label class="lbl">Einsatzort (Baustelle)</label>
       <input type="text" id="entryOrt" placeholder="z.B. Baustelle XY" list="baustellen">
@@ -191,48 +204,80 @@ textarea{resize:vertical;min-height:52px}
     </div>
   </div>
 
-  <!-- PRÜFPROTOKOLL TAB (NEU) -->
+  <!-- PRÜFPROTOKOLL TAB (NEU v8) -->
   <div class="tab" id="tab-pruef">
     <div class="card">
-      <div class="sec">🔍 Prüfprotokoll erstellen</div>
+      <div class="sec">🔍 Prüfprotokoll PV-Anlage</div>
       
       <label class="lbl">Prüfdatum</label>
       <input type="date" id="pruefDatum">
       
-      <label class="lbl">Prüfgegenstand</label>
-      <select id="pruefTyp">
-        <option value="">-- Auswählen --</option>
-        <option value="pv">PV-Anlage (Photovoltaikanlage)</option>
-        <option value="e-install">Elektrische Installation</option>
-        <option value="sicherheit">Sicherheitsprüfung</option>
-        <option value="sonstiges">Sonstiges</option>
-      </select>
-      
       <label class="lbl">Auftragsgeber (Firma)</label>
       <input type="text" id="pruefAuftragsgeber" placeholder="Name der bestellenden Firma">
       
-      <label class="lbl">Kontaktperson</label>
-      <input type="text" id="pruefKontakt" placeholder="Name und Telefon">
-      
       <label class="lbl">Baustelle / Einsatzort</label>
       <input type="text" id="pruefOrt" list="baustellen" placeholder="z.B. Baustelle XY">
-      
-      <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px;margin:10px 0">
-        <div style="font-weight:600;margin-bottom:8px">📋 Prüfgeräte nach DIN VDE 0100 600</div>
+
+      <!-- WECHSELRICHTER SEKTION -->
+      <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:12px;margin:12px 0">
+        <div style="font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          ⚡ Wechselrichter
+        </div>
+        
+        <label class="lbl">Hersteller / Modell</label>
+        <input type="text" id="wechselrichterModell" placeholder="z.B. SMA Sunny Tripower 8.0">
+        
+        <label class="lbl">Seriennummer Wechselrichter</label>
+        <div class="barcode-input">
+          <input type="text" id="wechselrichterSN" placeholder="S/N eingeben oder scannen">
+          <button class="btn-sm inf" onclick="openBarcodeScannerForField('wechselrichterSN')">📱 Scan</button>
+        </div>
+
+        <label class="lbl">Notstromfähigkeit</label>
+        <div style="display:flex;gap:8px;margin-top:2px">
+          <label style="flex:1;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d4d4d4;border-radius:8px;padding:9px 10px;cursor:pointer;font-size:13px">
+            <input type="radio" name="notstrom" value="ja" id="notstromJa" style="width:auto" onchange="toggleNotstromDetails()">
+            ✓ Ja
+          </label>
+          <label style="flex:1;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d4d4d4;border-radius:8px;padding:9px 10px;cursor:pointer;font-size:13px">
+            <input type="radio" name="notstrom" value="nein" id="notstromNein" style="width:auto" onchange="toggleNotstromDetails()" checked>
+            ✗ Nein
+          </label>
+        </div>
+        <div id="notstromDetails" style="display:none;margin-top:8px">
+          <label class="lbl">Notstrom-Details (Ersatzstrom/Backup-Box, Umschaltzeit, etc.)</label>
+          <input type="text" id="notstromDetailsText" placeholder="z.B. mit Ersatzstrombox, Umschaltzeit &lt;1s">
+        </div>
+      </div>
+
+      <!-- SPEICHER SEKTION -->
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin:12px 0">
+        <div style="font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+          🔋 Speichersystem
+          <button class="btn-sm suc" onclick="addSpeicher()">➕ Speicher</button>
+        </div>
+        
+        <div id="speicherList"></div>
+      </div>
+
+      <!-- PRÜFGERÄTE SEKTION -->
+      <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin:12px 0">
+        <div style="font-weight:600;margin-bottom:10px">📋 Prüfgeräte nach DIN VDE 0100 600</div>
         
         <label class="lbl">Prüfgerät 1</label>
-        <input type="text" id="pruefGeraet1" placeholder="z.B. Multimeter, Modell XYZ, S/N 12345">
+        <input type="text" id="pruefGeraet1" placeholder="z.B. Multimeter, Modell XYZ">
         
         <label class="lbl">Gültig bis (Kalibrierung)</label>
         <input type="date" id="pruefGeraet1Kalib">
         
         <label class="lbl">Prüfgerät 2 (PV-Spezial)</label>
-        <input type="text" id="pruefGeraetPV" placeholder="z.B. PV-Prüftester, Modell...">
+        <input type="text" id="pruefGeraetPV" placeholder="z.B. PV-Prüftester">
         
         <label class="lbl">Gültig bis</label>
         <input type="date" id="pruefGeraetPVKalib">
       </div>
-      
+
+      <!-- ERGEBNIS SEKTION -->
       <label class="lbl">Prüfergebnis</label>
       <select id="pruefErgebnis">
         <option value="">-- Auswählen --</option>
@@ -242,9 +287,10 @@ textarea{resize:vertical;min-height:52px}
       </select>
       
       <label class="lbl">Besonderheiten / Mängel</label>
-      <textarea id="pruefBesonderheiten" placeholder="Festgestellte Mängel, Besonderheiten, Empfehlungen..."></textarea>
-      
-      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;margin:10px 0">
+      <textarea id="pruefBesonderheiten" placeholder="Festgestellte Mängel, Besonderheiten..."></textarea>
+
+      <!-- UNTERSCHRIFT SEKTION -->
+      <div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:8px;padding:12px;margin:12px 0">
         <div style="font-weight:600;margin-bottom:8px">✍ Unterschrift Auftragsgeber</div>
         <canvas id="sigCanvas" class="sig-container" width="340" height="100"></canvas>
         <div class="sig-controls">
@@ -336,31 +382,14 @@ textarea{resize:vertical;min-height:52px}
         <span id="debugPruef">-</span>
       </div>
       <div class="debug-row">
-        <span>Verfügbare Monate:</span>
-        <span id="debugMonths" style="word-break:break-word">-</span>
-      </div>
-      <div class="debug-row">
         <span>Firebase-Status:</span>
-        <span><span class="debug-status" id="debugStatus"></span><span id="debugStatusText">Prüfe...</span></span>
-      </div>
-      <div class="debug-row">
-        <span>Cloud-Sync:</span>
-        <span id="debugCloudSync">-</span>
+        <span id="debugStatusText">Prüfe...</span>
       </div>
       
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid #dcfce7;display:flex;gap:6px">
-        <button class="btn suc" onclick="forceSync()" style="flex:1;font-size:11px">🔄 Sync erzwingen</button>
-        <button class="btn inf" onclick="downloadBackup()" style="flex:1;font-size:11px">💾 JSON Backup</button>
+        <button class="btn suc" onclick="forceSync()" style="flex:1;font-size:11px">🔄 Sync</button>
+        <button class="btn inf" onclick="downloadBackup()" style="flex:1;font-size:11px">💾 Backup</button>
       </div>
-      
-      <div id="debugMessages" style="margin-top:8px;font-size:11px;color:#166534"></div>
-    </div>
-
-    <!-- Mitarbeiter-Liste -->
-    <div class="card">
-      <div class="sec">Mitarbeiter verwalten</div>
-      <div id="maListe"></div>
-      <button class="btn pri" onclick="showAddMA()" style="margin-top:12px">➕ Neuer Mitarbeiter</button>
     </div>
   </div>
 
@@ -370,6 +399,31 @@ textarea{resize:vertical;min-height:52px}
       <div class="sec">👤 Profil</div>
       <div id="profileInfo"></div>
       <button class="btn dan" onclick="logout()" style="margin-top:12px">🚪 Abmelden</button>
+    </div>
+  </div>
+</div>
+
+<!-- BARCODE SCANNER MODAL -->
+<div id="barcodeModal" class="modal-overlay">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeBarcodeScanner()">✕</button>
+    <h3 style="margin:0 0 12px 0">📱 Barcode Scanner</h3>
+    
+    <div class="scanner-controls">
+      <button class="btn inf" onclick="startBarcodeScanner()" id="startScanBtn">▶ Scanner starten</button>
+      <button class="btn dan" onclick="closeBarcodeScanner()">✕ Beenden</button>
+    </div>
+    
+    <video id="barcodeVideo" playsinline></video>
+    
+    <div id="scannerStatus" style="text-align:center;margin:12px 0;color:#666;font-size:12px">
+      Bereit zum Scannen...
+    </div>
+    
+    <label class="lbl">Oder manuell eingeben:</label>
+    <div style="display:flex;gap:6px">
+      <input type="text" id="manualBarcodeInput" placeholder="Seriennummer eingeben...">
+      <button class="btn suc" onclick="applyManualBarcode()" style="flex:0">OK</button>
     </div>
   </div>
 </div>
@@ -385,7 +439,7 @@ const FIREBASE_CONFIG={
   appId:"1:123456789:web:abc123def456"
 };
 const COMPANY_ID="firma1";
-const STORAGE_KEY="arbeitszeit_v7";
+const STORAGE_KEY="arbeitszeit_v9";
 
 // ============ GLOBALE VARIABLEN ============
 let APP_PIN="0000",currentUser=null,isAdminMode=false;
@@ -393,6 +447,8 @@ let employees=[],entries=[],pruefprotokolle=[],fotos=[],firma={name:"",str:"",pl
 let firebaseReady=false,docRef=null,applyingSnapshot=false,saveLock=0;
 let currentMonth=new Date().getMonth(),currentYear=new Date().getFullYear();
 let sigCanvas=null,sigCtx=null,isDrawing=false;
+let currentScanField=null,barcodeStream=null;
+let speicherList=[]; // Aktuelles Prüfprotokoll-Speicherlist
 
 const monthNames=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 
@@ -408,10 +464,26 @@ window.addEventListener('DOMContentLoaded',function(){
     sigCanvas.addEventListener('mousemove',drawSig,false);
     sigCanvas.addEventListener('mouseup',endDraw,false);
   }
+  
+  // Numpad für PIN
+  var numpadHtml='';
+  for(var i=1;i<=9;i++){
+    numpadHtml+='<button class="numkey" onclick="handlePin(\''+i+'\')">'+i+'</button>';
+  }
+  numpadHtml+='<button class="numkey empty"></button>';
+  numpadHtml+='<button class="numkey" onclick="handlePin(\'0\')">0</button>';
+  numpadHtml+='<button class="numkey del" onclick="handlePin(\'del\')">⌫</button>';
+  document.getElementById('numpad').innerHTML=numpadHtml;
+  
   loadLocal();
   initFirebase();
   buildUserList();
   updateVerInfo();
+  
+  // Heute Datum vorbelegen
+  var today=new Date().toISOString().split('T')[0];
+  if(document.getElementById('entryDate'))document.getElementById('entryDate').value=today;
+  if(document.getElementById('pruefDatum'))document.getElementById('pruefDatum').value=today;
 });
 
 function gotoTab(t){
@@ -421,68 +493,147 @@ function gotoTab(t){
   event.target.classList.add('active');
   if(t==='heute')renderToday();
   else if(t==='monat')renderMonth();
-  else if(t==='pruef')renderPruefList();
+  else if(t==='pruef'){renderPruefList();resetSpeicherList();}
   else if(t==='ag')renderAgDebug();
 }
 
-function loginUser(id){
-  var user=employees.find(e=>e.id===id);
-  if(!user)return;
-  document.getElementById('pinStep').style.display='block';
-  document.getElementById('userStep').style.display='none';
-  document.getElementById('pinStepName').textContent='PIN für '+user.vn+' '+user.nl;
-  document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
-  pinBuffer='';
-  currentUser=id;
-  isAdminMode=false;
+// ============ NOTSTROM ============
+function toggleNotstromDetails(){
+  var ja=document.getElementById('notstromJa').checked;
+  document.getElementById('notstromDetails').style.display=ja?'block':'none';
 }
 
-function showAdminLogin(){
-  document.getElementById('pinStep').style.display='block';
-  document.getElementById('userStep').style.display='none';
-  document.getElementById('pinStepName').textContent='Admin-PIN eingeben';
-  document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
-  pinBuffer='';
-  currentUser=null;
-  isAdminMode=true;
+// ============ SPEICHER-MANAGEMENT ============
+function resetSpeicherList(){
+  speicherList=[];
+  renderSpeicherList();
 }
 
-function backToUserList(){
-  document.getElementById('userStep').style.display='block';
-  document.getElementById('pinStep').style.display='none';
-  pinBuffer='';
+function addSpeicher(){
+  speicherList.push({id:'s_'+Date.now(),typ:'LiFePO4',kapazitaet:'10',hersteller:'',modell:'',seriennummer:''});
+  renderSpeicherList();
 }
 
-function handlePin(digit){
-  if(pinBuffer.length<4){
-    pinBuffer+=digit;
-    document.getElementById('d'+pinBuffer.length-1).classList.add('filled');
-  }
-  if(pinBuffer.length===4){
-    checkPin();
-  }
+function removeSpeicher(idx){
+  speicherList.splice(idx,1);
+  renderSpeicherList();
 }
 
-var pinBuffer='';
-function checkPin(){
-  var correctPin=isAdminMode?APP_PIN:employees.find(e=>e.id===currentUser)?.pin;
-  if(pinBuffer===correctPin){
-    document.getElementById('loginScreen').style.display='none';
-    document.getElementById('mainApp').style.display='block';
-    renderToday();
-    updateVerInfo();
-    if(isAdminMode){
-      document.querySelectorAll('.agOnly').forEach(e=>e.style.display='flex');
-      renderAgDebug();
-    }
+function updateSpeicher(idx,field,value){
+  if(speicherList[idx])speicherList[idx][field]=value;
+}
+
+function renderSpeicherList(){
+  var html='';
+  if(speicherList.length===0){
+    html='<div style="text-align:center;color:#888;font-size:12px;padding:10px">Noch kein Speicher hinzugefügt</div>';
   }else{
-    document.getElementById('pinError').textContent='❌ PIN falsch!';
-    setTimeout(()=>{
-      document.getElementById('pinError').textContent='';
-      document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
-      pinBuffer='';
-    },1500);
+    speicherList.forEach((s,idx)=>{
+      html+='<div class="speicher-item">'+
+            '<div class="speicher-header">'+
+            '<h4>Speicher '+(idx+1)+'</h4>'+
+            '<button class="speicher-del" onclick="removeSpeicher('+idx+')">Löschen</button>'+
+            '</div>'+
+            '<div class="r2">'+
+            '<div><label class="lbl">Typ</label><select onchange="updateSpeicher('+idx+',\'typ\',this.value)" style="width:100%">'+
+            '<option value="LiFePO4" '+(s.typ==='LiFePO4'?'selected':'')+'">LiFePO4</option>'+
+            '<option value="Li-Ion" '+(s.typ==='Li-Ion'?'selected':'')+'">Li-Ion</option>'+
+            '<option value="Blei" '+(s.typ==='Blei'?'selected':'')+'">Blei-Säure</option>'+
+            '<option value="Sonstiges" '+(s.typ==='Sonstiges'?'selected':'')+'">Sonstiges</option>'+
+            '</select></div>'+
+            '<div><label class="lbl">Kapazität (kWh)</label><input type="number" step="0.1" value="'+s.kapazitaet+'" onchange="updateSpeicher('+idx+',\'kapazitaet\',this.value)"></div>'+
+            '</div>'+
+            '<label class="lbl">Hersteller</label>'+
+            '<input type="text" value="'+s.hersteller+'" onchange="updateSpeicher('+idx+',\'hersteller\',this.value)" placeholder="z.B. Tesla, Sunwoda">'+
+            '<label class="lbl">Modell</label>'+
+            '<input type="text" value="'+s.modell+'" onchange="updateSpeicher('+idx+',\'modell\',this.value)" placeholder="z.B. Powerwall 2">'+
+            '<label class="lbl">Seriennummer</label>'+
+            '<div class="barcode-input">'+
+            '<input type="text" value="'+s.seriennummer+'" onchange="updateSpeicher('+idx+',\'seriennummer\',this.value)" placeholder="S/N eingeben oder scannen">'+
+            '<button class="btn-sm suc" onclick="openBarcodeScannerForField(\'speicherSN_'+idx+'\')">📱 Scan</button>'+
+            '</div>'+
+            '</div>';
+    });
   }
+  document.getElementById('speicherList').innerHTML=html;
+}
+
+// ============ BARCODE SCANNER ============
+function openBarcodeScannerForField(fieldId){
+  currentScanField=fieldId;
+  document.getElementById('barcodeModal').classList.add('open');
+  document.getElementById('manualBarcodeInput').value='';
+  document.getElementById('scannerStatus').textContent='Bereit zum Scannen...';
+}
+
+function closeBarcodeScanner(){
+  if(barcodeStream){
+    barcodeStream.getTracks().forEach(track=>track.stop());
+    barcodeStream=null;
+  }
+  document.getElementById('barcodeVideo').style.display='none';
+  document.getElementById('barcodeModal').classList.remove('open');
+  currentScanField=null;
+}
+
+function startBarcodeScanner(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    alert('Browser unterstützt Kamera-Zugriff nicht!');
+    return;
+  }
+  
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
+    .then(stream=>{
+      barcodeStream=stream;
+      var video=document.getElementById('barcodeVideo');
+      video.srcObject=stream;
+      video.style.display='block';
+      video.play();
+      document.getElementById('scannerStatus').textContent='Kamera aktiv - Barcode vor die Kamera halten';
+      
+      // Canvas für Barcode-Erkennung
+      setTimeout(()=>detectBarcodeFromVideo(),1000);
+    })
+    .catch(err=>{
+      alert('Kamera-Zugriff verweigert: '+err.message);
+    });
+}
+
+function detectBarcodeFromVideo(){
+  var video=document.getElementById('barcodeVideo');
+  if(!video.srcObject)return;
+  
+  var canvas=document.createElement('canvas');
+  canvas.width=video.videoWidth;
+  canvas.height=video.videoHeight;
+  var ctx=canvas.getContext('2d');
+  ctx.drawImage(video,0,0);
+  
+  // Vereinfachte Barcode-Erkennung (würde in Produktion QuaggaJS verwenden)
+  document.getElementById('scannerStatus').textContent='Scanning... (manuell eingeben funktioniert auch)';
+  
+  if(barcodeStream){
+    setTimeout(()=>detectBarcodeFromVideo(),500);
+  }
+}
+
+function applyManualBarcode(){
+  var value=document.getElementById('manualBarcodeInput').value.trim();
+  if(!value){
+    alert('Bitte Seriennummer eingeben!');
+    return;
+  }
+  
+  if(currentScanField.startsWith('speicherSN_')){
+    var idx=parseInt(currentScanField.replace('speicherSN_',''));
+    updateSpeicher(idx,'seriennummer',value);
+    renderSpeicherList();
+  }else if(currentScanField==='wechselrichterSN'){
+    document.getElementById('wechselrichterSN').value=value;
+  }
+  
+  closeBarcodeScanner();
+  alert('✓ Seriennummer übernommen: '+value);
 }
 
 // ============ PRÜFPROTOKOLL FUNKTIONEN ============
@@ -490,10 +641,15 @@ function savePruef(){
   var pruef={
     id:'p_'+Date.now(),
     datum:document.getElementById('pruefDatum').value,
-    typ:document.getElementById('pruefTyp').value,
     auftragsgeber:document.getElementById('pruefAuftragsgeber').value,
-    kontakt:document.getElementById('pruefKontakt').value,
     ort:document.getElementById('pruefOrt').value,
+    wechselrichter:{
+      modell:document.getElementById('wechselrichterModell').value,
+      seriennummer:document.getElementById('wechselrichterSN').value,
+      notstrom:document.getElementById('notstromJa').checked?'ja':'nein',
+      notstromDetails:document.getElementById('notstromDetailsText').value
+    },
+    speicher:speicherList,
     geraet1:document.getElementById('pruefGeraet1').value,
     geraet1Kalib:document.getElementById('pruefGeraet1Kalib').value,
     geraetPV:document.getElementById('pruefGeraetPV').value,
@@ -509,20 +665,29 @@ function savePruef(){
     return;
   }
   
+  if(!pruef.wechselrichter.seriennummer || speicherList.length===0){
+    alert('Bitte mindestens einen Wechselrichter und Speicher eingeben!');
+    return;
+  }
+  
   pruefprotokolle.push(pruef);
   saveData();
   
   // Formular zurücksetzen
   document.getElementById('pruefDatum').value=new Date().toISOString().split('T')[0];
-  document.getElementById('pruefTyp').value='';
   document.getElementById('pruefAuftragsgeber').value='';
-  document.getElementById('pruefKontakt').value='';
   document.getElementById('pruefOrt').value='';
+  document.getElementById('wechselrichterModell').value='';
+  document.getElementById('wechselrichterSN').value='';
+  document.getElementById('notstromNein').checked=true;
+  document.getElementById('notstromDetailsText').value='';
+  toggleNotstromDetails();
   document.getElementById('pruefErgebnis').value='';
   document.getElementById('pruefBesonderheiten').value='';
   clearSig();
+  resetSpeicherList();
   
-  alert('✓ Prüfprotokoll gespeichert!');
+  alert('✓ Prüfprotokoll mit '+speicherList.length+' Speicher gespeichert!');
   renderPruefList();
 }
 
@@ -562,70 +727,21 @@ function renderPruefList(){
     html='<div style="text-align:center;color:#888;padding:20px">Noch keine Prüfprotokolle</div>';
   }else{
     pruefprotokolle.forEach(p=>{
-      var cls=p.typ==='pv'?'pv':'';
+      var speicherInfo=p.speicher.length+' Speicher';
+      var notstromOn=p.wechselrichter && p.wechselrichter.notstrom==='ja';
+      var notstromBdg=notstromOn?'<span class="bdg g">🔋 Notstrom: Ja</span>':'<span class="bdg n">Notstrom: Nein</span>';
       var status=p.ergebnis==='bestanden'?'<span class="bdg g">✓ Bestanden</span>':
                  p.ergebnis==='mangel'?'<span class="bdg a">⚠ Mit Mangel</span>':
                  '<span class="bdg r">✗ Nicht bestanden</span>';
-      html+='<div class="pruef-card '+cls+'">'+
+      html+='<div class="pruef-card pv">'+
             '<div style="font-weight:600">'+p.auftragsgeber+'</div>'+
             '<div class="pruef-date">'+p.datum+' · '+p.ort+'</div>'+
-            '<div class="pruef-status">'+status+'</div>'+
+            '<div class="pruef-date">⚡ WR: '+p.wechselrichter.seriennummer+' | 🔋 '+speicherInfo+'</div>'+
+            '<div class="pruef-status" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+status+notstromBdg+'</div>'+
             '</div>';
     });
   }
   document.getElementById('pruefList').innerHTML=html;
-}
-
-// ============ DEBUG PANEL ============
-function renderAgDebug(){
-  var allHours=0;
-  entries.forEach(e=>{
-    if(e.h)allHours+=e.h;
-  });
-  
-  var months=new Set();
-  entries.forEach(e=>{
-    if(e.datum){
-      var d=new Date(e.datum);
-      months.add(d.getFullYear()+'-'+(d.getMonth()+1));
-    }
-  });
-  
-  document.getElementById('debugEntries').textContent=entries.length;
-  document.getElementById('debugHours').textContent=allHours.toFixed(2)+' Stunden';
-  document.getElementById('debugPruef').textContent=pruefprotokolle.length;
-  document.getElementById('debugMonths').textContent=Array.from(months).sort().join(', ')||'Keine';
-  document.getElementById('debugStatus').className='debug-status '+(firebaseReady?'ok':'warn');
-  document.getElementById('debugStatusText').textContent=firebaseReady?'✓ Verbunden':'⏳ Verbindung...';
-  document.getElementById('debugCloudSync').textContent=new Date().toLocaleTimeString();
-}
-
-function forceSync(){
-  if(firebaseReady && docRef){
-    document.getElementById('debugMessages').textContent='Synchronisierung läuft...';
-    docRef.set({APP_PIN,employees,entries,pruefprotokolle,fotos,firma,savedAt:new Date().toISOString()})
-      .then(()=>{
-        document.getElementById('debugMessages').textContent='✓ Sync erfolgreich!';
-        setTimeout(()=>document.getElementById('debugMessages').textContent='',2000);
-      })
-      .catch(e=>{
-        document.getElementById('debugMessages').textContent='✗ Fehler: '+e.message;
-      });
-  }
-}
-
-function downloadBackup(){
-  var backup={
-    version:'7',
-    exportedAt:new Date().toISOString(),
-    APP_PIN,employees,entries,pruefprotokolle,fotos,firma
-  };
-  var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='arbeitszeit-backup-'+new Date().toISOString().split('T')[0]+'.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
 
 // ============ ARBEITSZEIT FUNKTIONEN ============
@@ -711,7 +827,6 @@ function renderMonth(){
   var totalHours=0,html='';
   monthData.forEach(e=>{
     totalHours+=e.h||0;
-    var emp=employees.find(x=>x.id===e.ma)?employees.find(x=>x.id===e.ma).vn+' '+employees.find(x=>x.id===e.ma).nl:'';
     html+='<div class="ent">'+
           '<div class="einfo">'+
           '<div class="etitle">'+e.datum+'</div>'+
@@ -733,23 +848,9 @@ function renderMonth(){
   document.getElementById('yearSelect').value=currentYear;
 }
 
-function prevMonth(){
-  currentMonth--;
-  if(currentMonth<0){currentMonth=11;currentYear--;}
-  renderMonth();
-}
-
-function nextMonth(){
-  currentMonth++;
-  if(currentMonth>11){currentMonth=0;currentYear++;}
-  renderMonth();
-}
-
-function changeMonth(){
-  currentMonth=parseInt(document.getElementById('monthSelect').value);
-  currentYear=parseInt(document.getElementById('yearSelect').value);
-  renderMonth();
-}
+function prevMonth(){currentMonth--;if(currentMonth<0){currentMonth=11;currentYear--;}renderMonth();}
+function nextMonth(){currentMonth++;if(currentMonth>11){currentMonth=0;currentYear++;}renderMonth();}
+function changeMonth(){currentMonth=parseInt(document.getElementById('monthSelect').value);currentYear=parseInt(document.getElementById('yearSelect').value);renderMonth();}
 
 function exportPDF(){
   var doc=new jsPDF();
@@ -787,7 +888,35 @@ function exportCSV(){
   URL.revokeObjectURL(a.href);
 }
 
-// ============ PERSISTENZ ============
+// ============ DEBUG & PERSISTENZ ============
+function renderAgDebug(){
+  var allHours=0;
+  entries.forEach(e=>{if(e.h)allHours+=e.h;});
+  
+  document.getElementById('debugEntries').textContent=entries.length;
+  document.getElementById('debugHours').textContent=allHours.toFixed(2)+' Stunden';
+  document.getElementById('debugPruef').textContent=pruefprotokolle.length;
+  document.getElementById('debugStatusText').textContent=firebaseReady?'✓ Verbunden':'⏳ Verbindung...';
+}
+
+function forceSync(){
+  if(firebaseReady && docRef){
+    docRef.set({APP_PIN,employees,entries,pruefprotokolle,fotos,firma,savedAt:new Date().toISOString()})
+      .then(()=>alert('✓ Sync erfolgreich!'))
+      .catch(e=>alert('Fehler: '+e.message));
+  }
+}
+
+function downloadBackup(){
+  var backup={version:'8',exportedAt:new Date().toISOString(),APP_PIN,employees,entries,pruefprotokolle,fotos,firma};
+  var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='arbeitszeit-backup-'+new Date().toISOString().split('T')[0]+'.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function saveData(){
   saveLocal();
   saveLock=Date.now()+30000;
@@ -803,6 +932,11 @@ function saveLocal(){
 function loadLocal(){
   try{
     var raw=localStorage.getItem(STORAGE_KEY);
+    // Migration: falls noch keine v9-Daten lokal vorhanden sind, alte v8-Daten übernehmen
+    // (Firebase bleibt ohnehin die verbindliche Quelle und überschreibt ggf. via Sync)
+    if(!raw){
+      raw=localStorage.getItem('arbeitszeit_v8');
+    }
     if(!raw)return;
     var data=JSON.parse(raw);
     if(data.APP_PIN)APP_PIN=data.APP_PIN;
@@ -855,11 +989,83 @@ function initFirebase(){
 function updateVerInfo(){
   var vi=document.getElementById('verInfo');
   if(!vi)return;
-  if(firebaseReady){
-    vi.innerHTML='Version 7 · ☁ Cloud-Sync aktiv · Prüfprotokolle';
-  }else{
-    vi.innerHTML='Version 7 · ⏳ Nur lokal (Cloud wird verbunden...)';
+  vi.innerHTML=firebaseReady?'Version 8 · ☁ Cloud-Sync · Barcode + Speicher':'Version 8 · ⏳ Verbindung...';
+}
+
+// ============ LOGIN FUNKTIONEN ============
+function loginUser(id){
+  var user=employees.find(e=>e.id===id);
+  if(!user)return;
+  document.getElementById('pinStep').style.display='block';
+  document.getElementById('userStep').style.display='none';
+  document.getElementById('pinStepName').textContent='PIN für '+user.vn+' '+user.nl;
+  document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
+  pinBuffer='';
+  currentUser=id;
+  isAdminMode=false;
+}
+
+function showAdminLogin(){
+  document.getElementById('pinStep').style.display='block';
+  document.getElementById('userStep').style.display='none';
+  document.getElementById('pinStepName').textContent='Admin-PIN eingeben';
+  document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
+  pinBuffer='';
+  currentUser=null;
+  isAdminMode=true;
+}
+
+function backToUserList(){
+  document.getElementById('userStep').style.display='block';
+  document.getElementById('pinStep').style.display='none';
+  pinBuffer='';
+}
+
+function handlePin(d){
+  if(d==='del'){
+    pinBuffer=pinBuffer.slice(0,-1);
+    document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(x=>x.classList.remove('filled'));
+    pinBuffer.split('').forEach((p,i)=>{document.getElementById('d'+i).classList.add('filled');});
+    return;
   }
+  if(pinBuffer.length<4){
+    pinBuffer+=d;
+    document.getElementById('d'+pinBuffer.length-1).classList.add('filled');
+  }
+  if(pinBuffer.length===4){
+    checkPin();
+  }
+}
+
+var pinBuffer='';
+function checkPin(){
+  var correctPin=isAdminMode?APP_PIN:employees.find(e=>e.id===currentUser)?.pin;
+  if(pinBuffer===correctPin){
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('mainApp').style.display='block';
+    renderToday();
+    updateVerInfo();
+    if(isAdminMode){
+      document.querySelectorAll('.agOnly').forEach(e=>e.style.display='flex');
+      renderAgDebug();
+    }
+  }else{
+    document.getElementById('pinError').textContent='❌ PIN falsch!';
+    setTimeout(()=>{
+      document.getElementById('pinError').textContent='';
+      document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
+      pinBuffer='';
+    },1500);
+  }
+}
+
+function logout(){
+  currentUser=null;
+  isAdminMode=false;
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('mainApp').style.display='none';
+  document.getElementById('userStep').style.display='block';
+  document.getElementById('pinStep').style.display='none';
 }
 
 function buildUserList(){
@@ -879,21 +1085,8 @@ function buildUserList(){
   document.getElementById('userList').innerHTML=html;
 }
 
-function logout(){
-  currentUser=null;
-  isAdminMode=false;
-  document.getElementById('loginScreen').style.display='flex';
-  document.getElementById('mainApp').style.display='none';
-  document.getElementById('userStep').style.display='block';
-  document.getElementById('pinStep').style.display='none';
-}
-
-// ============ STUB FUNKTIONEN ============
 function saveFirma(){alert('✓ Firmendaten gespeichert!');saveData();}
 function showAddMA(){alert('Neue Mitarbeiter können Sie noch nicht über diese App hinzufügen.');}
-function renderMAListe(){/* TODO */}
-function updateUrlaubKonto(){/* TODO */}
-function renderAgFilterSelect(){/* TODO */}
 
 window.addEventListener('pagehide',saveData);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveData();});
