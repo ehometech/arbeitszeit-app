@@ -1035,7 +1035,14 @@ function initApp(){
     updateUrlaubKonto();
     getGPS();
   }
-  gotoTab('heute');renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
+  var startTab='heute';
+  try{
+    var savedTab=localStorage.getItem('az_active_tab');
+    if(['heute','eintrag','fotos','monat','protokoll','ag','profil'].indexOf(savedTab)>=0)startTab=savedTab;
+  }catch(e){}
+  // Die Arbeitgeber-Seite darf bei einem Mitarbeiter-Login nicht geoeffnet werden.
+  if(startTab==='ag'&&!isAG())startTab='heute';
+  gotoTab(startTab);renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
 
   var ub=document.getElementById('uploadBox');
   ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
@@ -1053,6 +1060,7 @@ function getGPS(){
 
 // ============ TABS ============
 function gotoTab(id){
+  try{localStorage.setItem('az_active_tab',id);}catch(e){}
   ['heute','eintrag','fotos','monat','protokoll','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('active');});
   var tel=document.getElementById('tab-'+id);if(tel)tel.classList.add('active');
