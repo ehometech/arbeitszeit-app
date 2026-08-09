@@ -139,13 +139,12 @@ textarea{resize:vertical;min-height:52px}
 <!-- MAIN APP -->
 <div id="mainApp" style="display:none">
   <div class="nav">
-    <button class="nb active" data-tab="heute" onclick="gotoTab('heute')">⏱<br>Heute</button>
-    <button class="nb" data-tab="eintrag" onclick="gotoTab('eintrag')">➕<br>Eintrag</button>
-    <button class="nb" data-tab="fotos" onclick="gotoTab('fotos')">📸<br>Fotos</button>
-    <button class="nb" data-tab="monat" onclick="gotoTab('monat')">📅<br>Monat</button>
-    <button class="nb agOnly" data-tab="ag" onclick="gotoTab('ag')" style="display:none">🏢<br>Arbeitgeber</button>
-    <button class="nb" data-tab="profil" onclick="gotoTab('profil')">👤<br>Profil</button>
-    <button class="nb" data-tab="protokoll" onclick="gotoTab('protokoll')">📋<br>Protokoll</button>
+    <button class="nb active" onclick="gotoTab('heute')">⏱<br>Heute</button>
+    <button class="nb" onclick="gotoTab('eintrag')">➕<br>Eintrag</button>
+    <button class="nb" onclick="gotoTab('fotos')">📸<br>Fotos</button>
+    <button class="nb" onclick="gotoTab('monat')">📅<br>Monat</button>
+    <button class="nb agOnly" onclick="gotoTab('ag')" style="display:none">🏢<br>Arbeitgeber</button>
+    <button class="nb" onclick="gotoTab('profil')">👤<br>Profil</button>
   </div>
 
   <!-- HEUTE -->
@@ -489,87 +488,6 @@ textarea{resize:vertical;min-height:52px}
       <button class="btn dan" style="display:inline-flex;max-width:180px" onclick="logout()">🚪 Abmelden</button>
     </div>
   </div>
-
-  <!-- PROTOKOLL -->
-  <div class="tab" id="tab-protokoll">
-    <div class="card">
-      <div class="sec">🔧 PV-Anlage Prüfprotokoll</div>
-
-      <!-- Auftraggeber -->
-      <div style="background:#f0f0f0;padding:10px;border-radius:8px;margin-bottom:10px">
-        <div class="sec" style="margin:0 0 8px">Auftraggeber</div>
-        <span class="lbl">Name / Firma Auftraggeber</span>
-        <input type="text" id="auftrGeberName" placeholder="z.B. Max Müller / Musterfirma" onchange="auftrGeber.name=this.value;saveData();">
-        <span class="lbl">Unterschrift Auftraggeber (Signaturfeld)</span>
-        <canvas id="sigCanvas" width="320" height="100" style="border:2px solid #d4d4d4;border-radius:8px;background:#fff;margin-bottom:8px;width:100%;height:100px;touch-action:none;display:block"></canvas>
-        <div class="brow">
-          <button class="btn" onclick="clearSignature()">✕ Löschen</button>
-          <button class="btn suc" onclick="saveSignature()">✓ Unterschrift speichern</button>
-        </div>
-      </div>
-
-      <!-- PV-Speicher -->
-      <div style="background:#fffbeb;padding:10px;border-radius:8px;margin-bottom:10px">
-        <div class="sec" style="margin:0 0 8px">📦 PV-Speicher Daten</div>
-        <div id="speicherList"></div>
-        <button class="btn inf" style="width:100%;margin-top:8px" onclick="addSpeicherRow()">➕ Speicher hinzufügen</button>
-      </div>
-
-      <!-- Prüfgeräte PV -->
-      <div style="background:#e0f2fe;padding:10px;border-radius:8px;margin-bottom:10px">
-        <div class="sec" style="margin:0 0 8px">🔬 Prüfgerät Fabrikat (PV-Anlage)</div>
-        <span class="lbl">Prüfgerät Hersteller / Modell</span>
-        <input type="text" id="pruefGeraetFabPV" value="" placeholder="z.B. FLUKE 1653, Benning ST750" onchange="pruefGeraetePV.fab=this.value;saveData();">
-        <span class="lbl">Prüfgerät Seriennummer</span>
-        <input type="text" id="pruefGeraetSNPV" value="" placeholder="z.B. 12345678" onchange="pruefGeraetePV.sn=this.value;saveData();">
-      </div>
-
-      <!-- Notstrom -->
-      <div style="background:#fce7f3;padding:10px;border-radius:8px;margin-bottom:10px">
-        <div class="sec" style="margin:0 0 8px">⚡ Notstrom / Backup vorhanden</div>
-        <div style="display:flex;gap:10px">
-          <label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
-            <input type="radio" name="notstrom" value="ja" id="notstromJa" onchange="notstromStatus='ja';saveData();"> Ja
-          </label>
-          <label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
-            <input type="radio" name="notstrom" value="nein" id="notstromNein" checked onchange="notstromStatus='nein';saveData();"> Nein
-          </label>
-        </div>
-      </div>
-
-      <!-- Barcode Scanner -->
-      <div style="background:#f5f5f5;padding:10px;border-radius:8px;margin-bottom:10px">
-        <div class="sec" style="margin:0 0 8px">📱 Barcode-Scanner für Seriennummern</div>
-        <span class="lbl">Scanner-Modus</span>
-        <select id="barcodeMode" onchange="updateBarcodeMode()">
-          <option value="off">-- Aus --</option>
-          <option value="wr">Wechselrichter</option>
-          <option value="speicher">Speicher (letzter Eintrag)</option>
-        </select>
-        <input type="text" id="barcodeInput" placeholder="Barcode hier scannen / Enter drücken..." style="display:none;margin-top:8px">
-        <div id="barcodeStatus" style="font-size:12px;color:#888;margin-top:6px;min-height:18px"></div>
-        <div id="wrSnListDisplay" style="font-size:12px;color:#444;margin-top:6px"></div>
-      </div>
-
-      <div class="brow" style="margin-top:4px">
-        <button class="btn pri" onclick="saveProtokoll()">✓ Protokoll speichern</button>
-        <button class="btn dan" onclick="clearProtokoll()">✕ Leeren</button>
-      </div>
-    </div>
-
-    <!-- Prüfprotokoll DIN VDE 0100-600 -->
-    <div class="card">
-      <div class="sec">📐 Prüfprotokoll nach DIN VDE 0100-600</div>
-      <span class="lbl">Prüfgerät Hersteller / Modell (DIN VDE 0100-600)</span>
-      <input type="text" id="pruefGeraetFab600" value="" placeholder="z.B. Gossen Metrawatt Profitest" onchange="pruefGeraete600.fab=this.value;saveData();">
-      <span class="lbl">Prüfgerät Seriennummer (DIN VDE 0100-600)</span>
-      <input type="text" id="pruefGeraetSN600" value="" placeholder="z.B. GMW-2024-001" onchange="pruefGeraete600.sn=this.value;saveData();">
-    </div>
-
-    <div style="text-align:center;margin-top:8px;margin-bottom:20px">
-      <button class="btn dan" style="display:inline-flex;max-width:180px" onclick="logout()">🚪 Abmelden</button>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -591,21 +509,6 @@ var FIREBASE_CONFIG = {
 // Firmen-Code: alle Geraete mit demselben Code teilen dieselben Daten.
 // Du kannst das so lassen, oder fuer mehrere getrennte Firmen aendern.
 var COMPANY_ID = "firma1";
-
-// ========== BUGFIX: fehlende Variablen fuer Backup-Funktion ==========
-var baustellen = [];
-var timers = [];
-
-// ========== PROTOKOLL VARIABLEN ==========
-var auftrGeber = {name:'', signImage:'', timestamp:''};
-var speicherDaten = [];              // {hersteller, sn, notstrom}
-var pruefGeraetePV = {fab:'', sn:''}; // Pruefgeraet PV-Anlage
-var pruefGeraete600 = {fab:'', sn:''}; // Pruefgeraet DIN VDE 0100-600
-var notstromStatus = 'nein';
-var barcodeScanning = false;
-var wrSeriennummern = [];
-var protokolle = [];                 // fuer Backup-Kompatibilitaet
-var sigDrawing = false, sigCtx = null;
 
 // ============ CLOUDINARY CONFIG ============
 var CLOUD_NAME = 'ddbectnao';
@@ -716,7 +619,7 @@ function initApp(){
     document.getElementById('profilAvt').textContent=getInitials(ma.vn,ma.nl);
     updateUrlaubKonto();
   }
-  gotoTab('heute');renderRecent();renderMonth();renderGalerie();refreshProtokollFields();refreshProtokollFields();
+  gotoTab('heute');renderRecent();renderMonth();renderGalerie();
 
   // drag & drop
   var ub=document.getElementById('uploadBox');
@@ -725,19 +628,18 @@ function initApp(){
   ub.addEventListener('drop',function(e){e.preventDefault();ub.classList.remove('dragover');handleFotos(e.dataTransfer.files);});
   
   // Debug Panel initialisieren
-  initDebugPanel();checkMonthPersistence();
+  initDebugPanel();
 }
 
 // ============ TABS ============
 function gotoTab(id){
-  ['heute','eintrag','fotos','monat','ag','profil','protokoll'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
+  ['heute','eintrag','fotos','monat','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('active');});
   var tel=document.getElementById('tab-'+id);if(tel)tel.classList.add('active');
-  document.querySelectorAll('.nb[data-tab="'+id+'"]').forEach(function(b){b.classList.add('active');});
+  document.querySelectorAll('.nb').forEach(function(b){if(b.textContent.indexOf({heute:'Heute',eintrag:'Eintrag',fotos:'Fotos',monat:'Monat',ag:'Arbeitgeber',profil:'Profil'}[id]||'')>=0)b.classList.add('active');});
   if(id==='monat')renderMonth();
   if(id==='fotos')renderGalerie();
   if(id==='profil')updateUrlaubKonto();
-  if(id==='protokoll'){renderSpeicherList();}
 }
 
 // ============ TIMER ============
@@ -950,11 +852,6 @@ function importBackup(event){
       entries=data.entries||[];
       fotos=data.fotos||[];
       if(data.firma)firma=data.firma;
-    if(data.auftrGeber)auftrGeber=data.auftrGeber;
-    if(Array.isArray(data.speicherDaten))speicherDaten=data.speicherDaten;
-    if(data.pruefGeraetePV)pruefGeraetePV=data.pruefGeraetePV;
-    if(data.pruefGeraete600)pruefGeraete600=data.pruefGeraete600;
-    if(data.notstromStatus)notstromStatus=data.notstromStatus;
       saveData();
       alert('Backup erfolgreich importiert.');
       location.reload();
@@ -1487,7 +1384,7 @@ function storageWorks(){
 // Lokaler Cache: damit die App sofort startet, auch ohne Netz
 function saveLocal(){
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,auftrGeber:auftrGeber,speicherDaten:speicherDaten,pruefGeraetePV:pruefGeraetePV,pruefGeraete600:pruefGeraete600,notstromStatus:notstromStatus,savedAt:new Date().toISOString()}));
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,savedAt:new Date().toISOString()}));
   }catch(err){}
 }
 function loadLocal(){
@@ -1511,7 +1408,7 @@ function saveData(){
 }
 function pushToCloud(){
   if(firebaseReady && docRef && !applyingSnapshot){
-    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,auftrGeber:auftrGeber,speicherDaten:speicherDaten,pruefGeraetePV:pruefGeraetePV,pruefGeraete600:pruefGeraete600,notstromStatus:notstromStatus,savedAt:new Date().toISOString()})
+    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,savedAt:new Date().toISOString()})
       .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);});
   }
 }
@@ -1561,11 +1458,6 @@ function initFirebase(){
         if(Array.isArray(d.entries))entries=d.entries;
         if(Array.isArray(d.fotos))fotos=d.fotos;
         if(d.firma)firma=d.firma;
-        if(d.auftrGeber)auftrGeber=d.auftrGeber;
-        if(Array.isArray(d.speicherDaten))speicherDaten=d.speicherDaten;
-        if(d.pruefGeraetePV)pruefGeraetePV=d.pruefGeraetePV;
-        if(d.pruefGeraete600)pruefGeraete600=d.pruefGeraete600;
-        if(d.notstromStatus)notstromStatus=d.notstromStatus;
         applyingSnapshot=false;
         saveLocal();
         refreshAll();
@@ -1606,197 +1498,6 @@ buildUserList();
 
 // Beim Verlassen/Verstecken der Seite noch schnell sichern (auch mobil)
 window.addEventListener('pagehide',saveData);
-
-// ========== PROTOKOLL: FELDER BEIM LOGIN/RELOAD BEFUELLEN ==========
-// WICHTIG: Das ist der Fix fuer das "Tab verschwindet nach Login" Problem.
-// Ohne diese Funktion bleiben die Eingabefelder nach einem Neu-Login leer/inaktiv,
-// auch wenn die Daten im Hintergrund (auftrGeber, speicherDaten etc.) korrekt vorhanden sind.
-function refreshProtokollFields(){
-  var an=document.getElementById('auftrGeberName'); if(an) an.value=auftrGeber.name||'';
-  var pf=document.getElementById('pruefGeraetFabPV'); if(pf) pf.value=pruefGeraetePV.fab||'';
-  var ps=document.getElementById('pruefGeraetSNPV'); if(ps) ps.value=pruefGeraetePV.sn||'';
-  var pf6=document.getElementById('pruefGeraetFab600'); if(pf6) pf6.value=pruefGeraete600.fab||'';
-  var ps6=document.getElementById('pruefGeraetSN600'); if(ps6) ps6.value=pruefGeraete600.sn||'';
-  var nj=document.getElementById('notstromJa'), nn=document.getElementById('notstromNein');
-  if(nj&&nn){ if(notstromStatus==='ja'){nj.checked=true;} else {nn.checked=true;} }
-  if(document.getElementById('speicherList')) renderSpeicherList();
-  if(auftrGeber.signImage){
-    var cv=document.getElementById('sigCanvas');
-    if(cv){
-      var ctx=cv.getContext('2d');
-      var img=new Image();
-      img.onload=function(){ ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(img,0,0,cv.width,cv.height); };
-      img.src=auftrGeber.signImage;
-    }
-  }
-  initSignatureCanvas();
-}
-
-// ========== SPEICHER-VERWALTUNG ==========
-function addSpeicherRow(){
-  speicherDaten.push({hersteller:'', sn:'', notstrom:false});
-  renderSpeicherList();
-  saveData();
-}
-function removeSpeicherRow(idx){
-  speicherDaten.splice(idx,1);
-  renderSpeicherList();
-  saveData();
-}
-function renderSpeicherList(){
-  var list=document.getElementById('speicherList');
-  if(!list) return;
-  list.innerHTML = speicherDaten.map(function(s,idx){
-    return '<div style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:8px">'
-      + '<div class="r2">'
-      + '<div><span class="lbl">Hersteller</span><input type="text" value="'+(s.hersteller||'').replace(/"/g,'&quot;')+'" onchange="speicherDaten['+idx+'].hersteller=this.value;saveData();" placeholder="z.B. BYD, LG Chem"></div>'
-      + '<div><span class="lbl">Seriennummer</span><input type="text" value="'+(s.sn||'').replace(/"/g,'&quot;')+'" onchange="speicherDaten['+idx+'].sn=this.value;saveData();" placeholder="z.B. SN123456"></div>'
-      + '</div>'
-      + '<div style="display:flex;gap:8px;align-items:center;margin-top:8px">'
-      + '<label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="checkbox" '+(s.notstrom?'checked':'')+' onchange="speicherDaten['+idx+'].notstrom=this.checked;saveData();"> Notstrom/Backup</label>'
-      + '<button class="btn dan" style="flex:0;padding:6px 10px" onclick="removeSpeicherRow('+idx+')">✕</button>'
-      + '</div></div>';
-  }).join('') || '<div style="color:#888;font-size:12px;padding:6px 0">Noch keine Speicher eingetragen.</div>';
-}
-
-// ========== BARCODE SCANNER ==========
-function updateBarcodeMode(){
-  var mode=document.getElementById('barcodeMode').value;
-  barcodeScanning = mode!=='off';
-  var input=document.getElementById('barcodeInput');
-  if(barcodeScanning){
-    input.style.display='block';
-    input.value='';
-    input.focus();
-    document.getElementById('barcodeStatus').textContent = mode==='wr' ? '📱 Bereit fuer Wechselrichter-Scan' : '📱 Bereit fuer Speicher-Scan (letzter Eintrag)';
-  } else {
-    input.style.display='none';
-    document.getElementById('barcodeStatus').textContent='';
-  }
-}
-function handleBarcodeInput(sn){
-  sn=(sn||'').trim();
-  if(!sn) return;
-  var mode=document.getElementById('barcodeMode').value;
-  if(mode==='wr'){
-    wrSeriennummern.push(sn);
-    document.getElementById('barcodeStatus').textContent='✓ Wechselrichter SN erfasst: '+sn;
-    var disp=document.getElementById('wrSnListDisplay');
-    if(disp) disp.innerHTML='<strong>WR-Seriennummern:</strong> '+wrSeriennummern.join(', ');
-  } else if(mode==='speicher'){
-    if(speicherDaten.length===0){ addSpeicherRow(); }
-    var lastIdx=speicherDaten.length-1;
-    speicherDaten[lastIdx].sn=sn;
-    renderSpeicherList();
-    document.getElementById('barcodeStatus').textContent='✓ Speicher SN erfasst: '+sn;
-  }
-  saveData();
-}
-
-// ========== UNTERSCHRIFT (CANVAS) ==========
-function initSignatureCanvas(){
-  var cv=document.getElementById('sigCanvas');
-  if(!cv || cv.dataset.bound) return;
-  cv.dataset.bound='1';
-  sigCtx=cv.getContext('2d');
-  sigCtx.strokeStyle='#111'; sigCtx.lineWidth=2; sigCtx.lineCap='round';
-  function pos(e){
-    var r=cv.getBoundingClientRect();
-    var cx = (e.touches?e.touches[0].clientX:e.clientX) - r.left;
-    var cy = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
-    return {x: cx*(cv.width/r.width), y: cy*(cv.height/r.height)};
-  }
-  function start(e){ sigDrawing=true; var p=pos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x,p.y); e.preventDefault(); }
-  function move(e){ if(!sigDrawing) return; var p=pos(e); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); e.preventDefault(); }
-  function end(){ sigDrawing=false; }
-  cv.addEventListener('mousedown',start); cv.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
-  cv.addEventListener('touchstart',start,{passive:false}); cv.addEventListener('touchmove',move,{passive:false}); cv.addEventListener('touchend',end);
-}
-function clearSignature(){
-  var cv=document.getElementById('sigCanvas');
-  if(cv){ var ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height); }
-  auftrGeber.signImage='';
-  saveData();
-}
-function saveSignature(){
-  var name=document.getElementById('auftrGeberName').value.trim();
-  if(!name){ alert('Bitte zuerst den Namen des Auftraggebers eingeben.'); return; }
-  var cv=document.getElementById('sigCanvas');
-  auftrGeber.name=name;
-  auftrGeber.signImage = cv ? cv.toDataURL('image/png') : '';
-  auftrGeber.timestamp = new Date().toISOString();
-  saveData();
-  alert('✓ Unterschrift und Auftraggeber gespeichert!');
-}
-
-// ========== PROTOKOLL SPEICHERN / LEEREN ==========
-function saveProtokoll(){
-  var name=document.getElementById('auftrGeberName').value.trim();
-  if(!name){ alert('Bitte Auftraggeber eingeben.'); return; }
-  auftrGeber.name=name;
-  pruefGeraetePV.fab=document.getElementById('pruefGeraetFabPV').value.trim();
-  pruefGeraetePV.sn=document.getElementById('pruefGeraetSNPV').value.trim();
-  pruefGeraete600.fab=document.getElementById('pruefGeraetFab600').value.trim();
-  pruefGeraete600.sn=document.getElementById('pruefGeraetSN600').value.trim();
-  var nr=document.querySelector('input[name="notstrom"]:checked');
-  notstromStatus = nr ? nr.value : 'nein';
-  saveData();
-  alert('✓ Protokoll gespeichert!\n\nAuftraggeber: '+name+'\nSpeicher: '+speicherDaten.length+' Stueck\nNotstrom: '+(notstromStatus==='ja'?'Ja':'Nein'));
-}
-function clearProtokoll(){
-  if(!confirm('Alle Protokoll-Daten wirklich loeschen?')) return;
-  auftrGeber={name:'',signImage:'',timestamp:''};
-  speicherDaten=[];
-  pruefGeraetePV={fab:'',sn:''};
-  pruefGeraete600={fab:'',sn:''};
-  notstromStatus='nein';
-  wrSeriennummern=[];
-  refreshProtokollFields();
-  clearSignature();
-  var disp=document.getElementById('wrSnListDisplay'); if(disp) disp.innerHTML='';
-  document.getElementById('barcodeMode').value='off';
-  updateBarcodeMode();
-  saveData();
-}
-
-// ========== MONATS-PERSISTENZ CHECK ==========
-function checkMonthPersistence(){
-  var entryMonths={};
-  entries.forEach(function(e){
-    if(e.dat){ var m=e.dat.substring(0,7); entryMonths[m]=(entryMonths[m]||0)+1; }
-  });
-  var monthList=Object.keys(entryMonths).sort();
-  var html2;
-  if(monthList.length===0){
-    html2='<strong style="color:#dc2626">✗ Keine Eintraege vorhanden</strong>';
-  } else {
-    var total=Object.values(entryMonths).reduce(function(a,b){return a+b;},0);
-    html2='<strong style="color:#16a34a">✓ Verfuegbare Monate:</strong><br>'+monthList.join(', ')
-      +'<br><strong style="color:#2563eb;font-size:11px">Gesamt: '+total+' Eintraege</strong>';
-  }
-  var el=document.getElementById('debugAvailableMonths');
-  if(el) el.innerHTML=html2;
-}
-function refreshDebugPanel(){
-  checkMonthPersistence();
-  var te=document.getElementById('debugTotalEntries'); if(te) te.textContent=entries.length;
-  var fbs=document.getElementById('debugFirebaseStatus'); if(fbs) fbs.innerHTML= firebaseReady?'✓ Verbunden':'❌ Nicht verbunden';
-  var cs=document.getElementById('debugCloudSync'); if(cs) cs.textContent = firebaseReady?'Aktiv':'Inaktiv';
-}
-
-// Barcode Enter-Listener (einmalig, robust gegen mehrfaches Binden)
-(function bindBarcodeListenerOnce(){
-  document.addEventListener('keypress', function(e){
-    if(e.key==='Enter'){
-      var el=document.getElementById('barcodeInput');
-      if(el && document.activeElement===el && barcodeScanning){
-        handleBarcodeInput(el.value);
-        el.value='';
-      }
-    }
-  });
-})();
-
 document.addEventListener('visibilitychange',function(){if(document.hidden)saveData();});
 
 </script>
