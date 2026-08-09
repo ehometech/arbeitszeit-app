@@ -2552,7 +2552,7 @@ function buildProtokollPDF(p,pf,imgs){
   if(!isWb&&p.strings&&p.strings.length){
     h2('Strangmessungen (DC)');
     doc.autoTable({startY:y,
-      head:[['Strang','Module','Polarität','Uoc (V)','Isc (A)','Riso (MΩ)','Erdung (Ω)']],
+      head:[['Strang','Module','Polarität','Uoc (V)','Isc (A)','Riso (MOhm)','Erdung (Ohm)']],
       body:p.strings.map(function(s,i){return [i+1,s.anz||'-',s.pol==='nein'?'n.i.O.':'i.O.',s.uoc||'-',s.isc||'-',s.riso||'-',s.erd||'-'];}),
       theme:'grid',styles:{font:'helvetica',fontSize:8,cellPadding:1.5,halign:'center'},
       headStyles:{fillColor:[240,240,240],textColor:[40,40,40],fontStyle:'bold'},margin:{left:M,right:M}});
@@ -2593,7 +2593,7 @@ function buildProtokollPDF(p,pf,imgs){
   if(v.kreise&&v.kreise.length){
     nl(20);h2('DIN VDE 0100-600 — Messen'+(v.verteiler?' · Verteiler '+v.verteiler:''));
     doc.autoTable({startY:y,
-      head:[['Nr.','Zielbezeichnung','Leitung','Anz.×mm²','Sicherung','In (A)','Zs (Ω)','Riso (MΩ)','IΔn (mA)','tA (ms)']],
+      head:[['Nr.','Zielbezeichnung','Leitung','Anz.×mm²','Sicherung','In (A)','Zs (Ohm)','Riso (MOhm)','IΔn (mA)','tA (ms)']],
       body:v.kreise.map(function(k,i){return [i+1,k.ziel||'-',k.typ||'-',k.quer||'-',k.sich||'-',k.inA||'-',k.zs||'-',k.riso||'-',k.idn||'-',k.ta||'-'];}),
       theme:'grid',styles:{font:'helvetica',fontSize:7,cellPadding:1.2,halign:'center'},
       headStyles:{fillColor:[240,240,240],textColor:[40,40,40],fontStyle:'bold'},
@@ -2602,7 +2602,7 @@ function buildProtokollPDF(p,pf,imgs){
   }
   var paSel=VDE_PA.filter(function(c){return v.pa&&v.pa[c[0]];}).map(function(c){return c[1];});
   if(paSel.length){
-    nl(12);h2('Durchgängigkeit Potentialausgleich (< 1 Ω nachgewiesen)');
+    nl(12);h2('Durchgängigkeit Potentialausgleich (< 1 Ohm nachgewiesen)');
     doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(40,40,40);
     var pat=doc.splitTextToSize(paSel.join('  ·  '),PW-2*M);
     doc.text(pat,M,y);y+=pat.length*3.8+3;
@@ -2612,8 +2612,8 @@ function buildProtokollPDF(p,pf,imgs){
   kv([
     ['Netzform / Netzbetreiber',(p.ac.netz||'—')+(p.ac.betreiber?' · '+p.ac.betreiber:'')],
     ['RCD',(p.ac.rcd||'—')+(p.ac.rcdMs?' · Auslösezeit '+p.ac.rcdMs+' ms':'')],
-    ['Schutzleiter / Erdung','Durchgängigkeit '+(p.ac.schutzl||'—')+' Ω · RE '+(p.ac.re||'—')+' Ω'],
-    ['Riso AC / Zs',(p.ac.riso||'—')+' MΩ · Zs '+(p.ac.zs||'—')+' Ω']
+    ['Schutzleiter / Erdung','Durchgängigkeit '+(p.ac.schutzl||'—')+' Ohm · RE '+(p.ac.re||'—')+' Ohm'],
+    ['Riso AC / Zs',(p.ac.riso||'—')+' MOhm · Zs '+(p.ac.zs||'—')+' Ohm']
   ]);
   // Stückliste
   if(p.material&&p.material.length){
