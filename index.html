@@ -1827,23 +1827,31 @@ function protSectStep(d){
 function updateProtTyp(){showProtSect(currentProtSect);}
 // Entwurf (Autosave gegen Datenverlust bei Reload)
 var protDraftTimer=null;
+var PROT_DRAFT_KEY='az_prot_draft';
 function saveProtDraft(){
+  clearTimeout(protDraftTimer);protDraftTimer=null;
   var fv=document.getElementById('protFormView');
   if(!fv||fv.style.display==='none')return;
-  try{localStorage.setItem('az_prot_draft',JSON.stringify({idx:editingProtIdx,p:buildProtFromForm(),t:Date.now()}));}catch(e){}
+  try{
+    var original=(editingProtIdx>=0&&protokolle[editingProtIdx])?protokolle[editingProtIdx]:null;
+    localStorage.setItem(PROT_DRAFT_KEY,JSON.stringify({version:2,idx:editingProtIdx,recordId:original&&original.id!=null?original.id:null,p:buildProtFromForm(),t:Date.now()}));
+  }catch(e){console.warn('Protokoll-Entwurf konnte nicht lokal gespeichert werden:',e);}
 }
 function queueProtDraft(){clearTimeout(protDraftTimer);protDraftTimer=setTimeout(saveProtDraft,800);}
 function restoreProtDraft(){
   try{
-    var d=JSON.parse(localStorage.getItem('az_prot_draft')||'null');
+    var d=JSON.parse(localStorage.getItem(PROT_DRAFT_KEY)||'null');
     if(!d||!d.p){alert('Kein Entwurf vorhanden.');return;}
-    editingProtIdx=(typeof d.idx==='number'&&d.idx>=0&&d.idx<protokolle.length)?d.idx:-1;
+    var found=-1;
+    if(d.recordId!=null)found=protokolle.findIndex(function(p){return p&&String(p.id)===String(d.recordId);});
+    else if(typeof d.idx==='number'&&d.idx>=0&&d.idx<protokolle.length)found=d.idx; // alte Entwuerfe
+    editingProtIdx=found;
     openProtokollForm(d.p);
   }catch(e){alert('Entwurf konnte nicht geladen werden.');}
 }
 function discardProtDraft(){
   if(!confirm('Entwurf endgültig verwerfen?'))return;
-  try{localStorage.removeItem('az_prot_draft');}catch(e){}
+  try{localStorage.removeItem(PROT_DRAFT_KEY);}catch(e){}
   renderProtokollListe();
 }
 // Fotos direkt im Protokoll aufnehmen
@@ -2269,7 +2277,7 @@ function renderProtokollListe(){
   var allDb=komponentenDB.module.length+komponentenDB.wr.length+(komponentenDB.speicher||[]).length+komponentenDB.zsk.length+(komponentenDB.wallbox||[]).length+komponentenDB.material.length;
   var allEl=document.getElementById('dbCountAll');if(allEl)allEl.textContent=allDb;
   var db=document.getElementById('protDraftBanner');
-  if(db)db.style.display=localStorage.getItem('az_prot_draft')?'block':'none';
+  if(db)db.style.display=localStorage.getItem(PROT_DRAFT_KEY)?'block':'none';
   if(!protokolle.length){el.innerHTML='<div style="color:#888;font-size:13px;padding:16px 0;text-align:center">Noch keine Protokolle.<br>Tippe auf „+ Neues Protokoll".</div>';return;}
   el.innerHTML=protokolle.map(function(p,i){
     var auftragOk=!p.auftraggeber||!!p.sigAuftraggeber;
@@ -2287,6 +2295,9 @@ function renderProtokollListe(){
   }).join('');
 }
 function newProtokoll(){
+  try{
+    if(localStorage.getItem(PROT_DRAFT_KEY)&&!confirm('Es gibt einen ungespeicherten Entwurf. Mit OK wird ein neues Protokoll begonnen; der Entwurf bleibt erhalten, bis du im neuen Formular etwas aenderst. Abbrechen stellt den Entwurf wieder her.')){restoreProtDraft();return;}
+  }catch(e){}
   editingProtIdx=-1;
   openProtokollForm(null);
 }
@@ -2437,7 +2448,7 @@ function saveProtokoll(silent){
   upsertKomponenten(p);
   saveData();
   fillDatalists();
-  try{localStorage.removeItem('az_prot_draft');}catch(e){}
+  try{localStorage.removeItem(PROT_DRAFT_KEY);}catch(e){}
   if(!silent){alert('Protokoll gespeichert!');closeProtokollForm();}
 }
 
@@ -2689,11 +2700,32 @@ function stuecklisteXLSX(idx){
 // Protokoll-Entwurf automatisch sichern
 (function(){
   var fv=document.getElementById('protFormView');
-  if(fv){fv.addEventListener('input',queueProtDraft);fv.addEventListener('change',queueProtDraft);}
+  if(fv){
+    fv.addEventListener('input',queueProtDraft);
+    fv.addEventListener('change',queueProtDraft);
+    // Erfasst auch dynamisch hinzugefuegte/entfernte Zeilen und Checkbox-Aenderungen.
+    fv.addEventListener('click',function(e){if(e.target&&e.target.closest('button'))queueProtDraft();});
+  }
 })();
 
-window.addEventListener('pagehide',saveData);
-document.addEventListener('visibilitychange',function(){if(document.hidden)saveData();});
+// Debounce-Timer werden beim Reload eventuell nicht mehr ausgefuehrt. Deshalb
+// den Formularstand bei allen Verlassen-/Hintergrund-Ereignissen synchron sichern.
+window.addEventListener('beforeunload',function(){saveProtDraft();saveLocal();});
+window.addEventListener('pagehide',function(){saveProtDraft();saveData();});
+document.addEventListener('visibilitychange',function(){if(document.hidden){saveProtDraft();saveData();}});
+
+// Nach einem echten Seiten-Reload den zuletzt offenen Entwurf automatisch
+// anzeigen. Bei normalem Start bleibt die Protokollliste unveraendert.
+setTimeout(function(){
+  try{
+    var nav=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0];
+    var reloaded=nav?nav.type==='reload':(performance.navigation&&performance.navigation.type===1);
+    if(reloaded&&currentUser&&localStorage.getItem(PROT_DRAFT_KEY)){
+      gotoTab('protokoll');
+      restoreProtDraft();
+    }
+  }catch(e){}
+},0);
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
