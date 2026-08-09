@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arbeitszeit App v7 - Mit Prüfprotokoll</title>
+<title>Arbeitszeit App</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
 body{background:#f5f5f5;color:#111;max-width:420px;margin:0 auto;min-height:100vh}
-.nav{display:flex;background:#fff;border-bottom:1px solid #e5e5e5;position:sticky;top:0;z-index:10;flex-wrap:wrap}
-.nb{flex:1;padding:9px 2px 7px;font-size:10px;background:none;border:none;border-bottom:2px solid transparent;color:#888;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:50px}
+.nav{display:flex;background:#fff;border-bottom:1px solid #e5e5e5;position:sticky;top:0;z-index:10}
+.nb{flex:1;padding:9px 2px 7px;font-size:10px;background:none;border:none;border-bottom:2px solid transparent;color:#888;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
 .nb.active{color:#111;border-bottom-color:#111;font-weight:600}
 .tab{display:none;padding:12px 12px 30px}.tab.active{display:block}
 .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-bottom:10px}
@@ -26,6 +26,7 @@ body{background:#f5f5f5;color:#111;max-width:420px;margin:0 auto;min-height:100v
 .btn.suc{border-color:#86efac;color:#16a34a}.btn.suc:hover{background:#f0fdf4}
 .btn.inf{border-color:#93c5fd;color:#2563eb}.btn.inf:hover{background:#eff6ff}
 .btn.warn{border-color:#fcd34d;color:#d97706}.btn.warn:hover{background:#fffbeb}
+.btn.cam{background:#111;color:#fff;border-color:#111;font-size:14px;padding:12px}
 .lbl{font-size:12px;color:#666;display:block;margin:9px 0 3px}
 input,select,textarea{width:100%;font-size:13px;border-radius:8px;border:1px solid #d4d4d4;padding:7px 10px;background:#fff;color:#111;outline:none}
 input:focus,select:focus,textarea:focus{border-color:#111}
@@ -34,7 +35,8 @@ textarea{resize:vertical;min-height:52px}
 .bdg{display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
 .bdg.g{background:#dcfce7;color:#166534}.bdg.a{background:#fef3c7;color:#92400e}
 .bdg.r{background:#fee2e2;color:#991b1b}.bdg.b{background:#dbeafe;color:#1e40af}
-.bdg.n{background:#f5f5f5;color:#666}
+.bdg.n{background:#f5f5f5;color:#666}.bdg.p{background:#f3e8ff;color:#6b21a8}
+.bdg.cam{background:#111;color:#fff}
 .ent{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #f0f0f0}
 .ent:last-child{border-bottom:none}
 .edot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -42,21 +44,41 @@ textarea{resize:vertical;min-height:52px}
 .etitle{font-size:13px;font-weight:500}
 .esub{font-size:11px;color:#888}
 .avt{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
-
-/* Unterschrift Canvas */
-.sig-container{border:2px solid #d4d4d4;border-radius:8px;background:#fff;margin:8px 0;touch-action:none;cursor:crosshair}
-.sig-controls{display:flex;gap:6px;margin-top:8px}
-.sig-controls button{flex:1;padding:8px;font-size:12px}
-
-/* Debug Panel */
-.debug-panel{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin-bottom:10px;font-size:12px}
-.debug-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #dcfce7}
-.debug-row:last-child{border-bottom:none}
-.debug-status{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:4px}
-.debug-status.ok{background:#16a34a}
-.debug-status.warn{background:#d97706}
-.debug-status.err{background:#dc2626}
-
+.sbar{height:6px;border-radius:3px;background:#e5e5e5;margin:6px 0;overflow:hidden}
+.sfill{height:100%;border-radius:3px;transition:width .3s}
+.tdis{font-size:40px;font-weight:700;letter-spacing:2px;font-variant-numeric:tabular-nums}
+.tsub{font-size:12px;color:#888;margin-top:3px}
+.ma-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f0f0f0;cursor:pointer}
+.ma-row:last-child{border-bottom:none}
+.modal-ov{background:rgba(0,0,0,.45);border-radius:12px;padding:12px;margin-bottom:10px;display:none}
+.modal-ov.open{display:block}
+.modal-in{background:#fff;border-radius:12px;border:1px solid #e5e5e5;padding:16px}
+.divider{height:1px;background:#f0f0f0;margin:10px 0}
+/* Foto Grid */
+.foto-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.foto-thumb{border-radius:8px;overflow:hidden;position:relative;background:#f5f5f5;aspect-ratio:4/3}
+.foto-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.foto-thumb .foto-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.foto-thumb .foto-meta{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:3px 6px}
+.foto-upload-box{border:2px dashed #d4d4d4;border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-top:8px;transition:border-color .15s}
+.foto-upload-box:hover{border-color:#111}
+.foto-upload-box.dragover{border-color:#2563eb;background:#eff6ff}
+.upload-progress{height:4px;border-radius:2px;background:#e5e5e5;margin-top:6px;overflow:hidden;display:none}
+.upload-bar{height:100%;background:#2563eb;border-radius:2px;transition:width .3s}
+/* Baustellen-Dokumentation */
+.bau-card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;margin-bottom:10px;overflow:hidden}
+.bau-header{padding:12px 14px;border-bottom:1px solid #f0f0f0}
+.bau-fotos{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#f0f0f0}
+.bau-foto{aspect-ratio:4/3;overflow:hidden;background:#f5f5f5;cursor:pointer}
+.bau-foto img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}
+.bau-foto:hover img{transform:scale(1.03)}
+.bau-footer{padding:8px 14px;font-size:11px;color:#888}
+/* Lightbox */
+.lightbox{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.92);z-index:999;flex-direction:column;align-items:center;justify-content:center}
+.lightbox.open{display:flex}
+.lightbox img{max-width:96vw;max-height:80vh;border-radius:8px;object-fit:contain}
+.lightbox-info{color:#fff;font-size:12px;margin-top:10px;text-align:center}
+.lightbox-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer}
 /* LOGIN */
 #loginScreen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#f5f5f5}
 .login-card{background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:28px 24px;width:100%;max-width:360px;text-align:center}
@@ -67,25 +89,29 @@ textarea{resize:vertical;min-height:52px}
 .numkey{padding:16px;border-radius:12px;border:1px solid #e5e5e5;background:#fff;font-size:20px;font-weight:600;cursor:pointer;color:#111}
 .numkey:hover{background:#f5f5f5}.numkey:active{transform:scale(.95);background:#e5e5e5}
 .numkey.del{font-size:16px;color:#888}
+.numkey.empty{border:none;background:none;cursor:default}
 .user-item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;cursor:pointer;margin-bottom:6px;border:1px solid #e5e5e5;background:#fff}
 .user-item:hover{background:#f5f5f5}
-
-/* Prüfprotokoll Übersicht */
-.pruef-card{background:#fff;border-left:4px solid #2563eb;padding:12px;margin-bottom:8px;border-radius:4px}
-.pruef-card.pv{border-left-color:#16a34a}
-.pruef-date{font-size:11px;color:#888}
-.pruef-status{font-size:12px;font-weight:600;margin-top:4px}
+.shake{animation:shake .4s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightboxImg" src="" alt="Foto">
+  <div class="lightbox-info" id="lightboxInfo"></div>
+</div>
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
     <div style="font-size:40px;margin-bottom:12px">⏱</div>
-    <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit App v7</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit App</div>
     <div style="font-size:13px;color:#888;margin-bottom:20px">Bitte Mitarbeiter auswählen</div>
     <div id="userStep">
       <div id="userList"></div>
@@ -106,649 +132,1242 @@ textarea{resize:vertical;min-height:52px}
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 7 · Prüfprotokoll + Datensicherheit</div>
+  <div id="storageWarn" style="display:none;max-width:340px;margin-top:14px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:12px;color:#b91c1c;text-align:center"></div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 4 · Cloud-Sync</div>
 </div>
 
 <!-- MAIN APP -->
 <div id="mainApp" style="display:none">
   <div class="nav">
-    <button class="nb active" onclick="gotoTab('heute')">📋<br>Heute</button>
+    <button class="nb active" onclick="gotoTab('heute')">⏱<br>Heute</button>
     <button class="nb" onclick="gotoTab('eintrag')">➕<br>Eintrag</button>
-    <button class="nb" onclick="gotoTab('pruef')">🔍<br>Prüf</button>
+    <button class="nb" onclick="gotoTab('fotos')">📸<br>Fotos</button>
     <button class="nb" onclick="gotoTab('monat')">📅<br>Monat</button>
     <button class="nb agOnly" onclick="gotoTab('ag')" style="display:none">🏢<br>Arbeitgeber</button>
     <button class="nb" onclick="gotoTab('profil')">👤<br>Profil</button>
   </div>
 
-  <!-- HEUTE TAB -->
+  <!-- HEUTE -->
   <div class="tab active" id="tab-heute">
     <div class="card">
-      <div class="sec">Heutige Arbeitszeit</div>
-      <div class="m2">
-        <div class="met">
-          <div class="ml">Einstieg</div>
-          <div class="mv" id="todayStart">--:--</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-size:15px;font-weight:600" id="activeMaName">—</div>
+          <div style="font-size:12px;color:#888" id="todayDate"></div>
         </div>
-        <div class="met">
-          <div class="ml">Ausstieg</div>
-          <div class="mv" id="todayEnd">--:--</div>
-        </div>
+        <span class="bdg g" id="statusBadge">● Bereit</span>
       </div>
-      <div class="m2">
-        <div class="met">
-          <div class="ml">Stunden heute</div>
-          <div class="mv g" id="todayHours">0,00</div>
-        </div>
-        <div class="met">
-          <div class="ml">Pause (Min.)</div>
-          <div class="mv" id="todayPause">0</div>
-        </div>
+      <div style="text-align:center;padding:1.2rem 0 .8rem">
+        <div class="tdis" id="timerDisp">00:00:00</div>
+        <div class="tsub" id="timerSub">Nicht gestartet</div>
       </div>
-      <div style="margin-top:12px">
-        <button class="btn suc" onclick="quickStart()" style="margin-bottom:6px">▶ Einstieg</button>
-        <button class="btn dan" onclick="quickStop()">⏹ Ausstieg</button>
+      <div class="brow">
+        <button class="btn suc" id="startBtn" onclick="startTimer()">▶ Starten</button>
+        <button class="btn dan" id="stopBtn" onclick="stopTimer()" disabled>⏸ Stopp</button>
       </div>
+      <div class="brow">
+        <button class="btn" onclick="addPause(15)">☕ +15 Min</button>
+        <button class="btn" onclick="addPause(30)">+30 Min</button>
+        <button class="btn pri" onclick="saveQuick()">✓ Speichern</button>
+      </div>
+    </div>
+    <div class="m2">
+      <div class="met"><div class="ml">Heute netto</div><div class="mv g" id="todayNet">0,00 h</div></div>
+      <div class="met"><div class="ml">Überstunden</div><div class="mv a" id="todayOver">+0,00 h</div></div>
+    </div>
+    <div class="card">
+      <div class="sec">Wochenstatus</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span id="weekLbl">0 / 35 h</span><span id="weekPct" style="color:#888">0%</span>
+      </div>
+      <div class="sbar"><div class="sfill" id="weekBar" style="width:0%;background:#16a34a"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <span class="bdg g" id="ampel">Auf Kurs</span>
+        <span style="font-size:11px;color:#888" id="kwLabel">KW —</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec">Letzte Einträge</div>
+      <div id="recentList"></div>
+    </div>
+    <div style="text-align:center;margin-top:8px">
+      <button class="btn dan" style="display:inline-flex;max-width:180px" onclick="logout()">🚪 Abmelden</button>
     </div>
   </div>
 
-  <!-- EINTRAG TAB -->
+  <!-- EINTRAG -->
   <div class="tab" id="tab-eintrag">
     <div class="card">
-      <div class="sec">Neuer Eintrag</div>
-      <label class="lbl">Datum</label>
-      <input type="date" id="entryDate">
-      
-      <label class="lbl">Einsatzort (Baustelle)</label>
-      <input type="text" id="entryOrt" placeholder="z.B. Baustelle XY" list="baustellen">
-      <datalist id="baustellen"></datalist>
-      
-      <div class="r2">
-        <div>
-          <label class="lbl">Beginn</label>
-          <input type="time" id="entryStart">
-        </div>
-        <div>
-          <label class="lbl">Ende</label>
-          <input type="time" id="entryEnd">
-        </div>
+      <div class="sec">Neuer Zeiteintrag</div>
+      <div id="maSelectRow" style="display:none">
+        <span class="lbl">Mitarbeiter</span><select id="eingMA"></select>
       </div>
-      
-      <div class="r2">
-        <div>
-          <label class="lbl">Pause (Min.)</label>
-          <input type="number" id="entryPause" value="0" min="0" step="5">
-        </div>
-        <div>
-          <label class="lbl">Stunden (auto)</label>
-          <input type="text" id="entryHours" readonly>
-        </div>
-      </div>
-      
-      <label class="lbl">Notizen</label>
-      <textarea id="entryNotiz" placeholder="Notizen zur Arbeitszeit..."></textarea>
-      
-      <button class="btn pri" onclick="saveEntry()" style="margin-top:12px">✓ Speichern</button>
-    </div>
-  </div>
-
-  <!-- PRÜFPROTOKOLL TAB (NEU v7) -->
-  <div class="tab" id="tab-pruef">
-    <div class="card">
-      <div class="sec">🔍 Prüfprotokoll</div>
-      
-      <label class="lbl">Prüfdatum</label>
-      <input type="date" id="pruefDatum">
-      
-      <label class="lbl">Typ</label>
-      <select id="pruefTyp">
-        <option value="">-- Auswählen --</option>
-        <option value="wiederholungspruefung">Wiederholungsprüfung</option>
-        <option value="erstpruefung">Erstprüfung</option>
-        <option value="abnahmepruefung">Abnahmeprüfung</option>
+      <span class="lbl">Datum</span>
+      <input type="date" id="eingDat">
+      <span class="lbl">Typ</span>
+      <select id="eingTyp" onchange="toggleTyp()">
+        <option value="arbeit">Arbeit</option>
+        <option value="urlaub">Urlaub</option>
+        <option value="krank">Krankheit</option>
+        <option value="feiertag">Feiertag</option>
+        <option value="schule">Schule / Ausbildung</option>
+        <option value="sonder">Sonderfall</option>
       </select>
-      
-      <label class="lbl">Auftragsgeber (Firma)</label>
-      <input type="text" id="pruefAuftragsgeber" placeholder="Name der bestellenden Firma">
-      
-      <label class="lbl">Kontaktperson</label>
-      <input type="text" id="pruefKontakt" placeholder="Name + Tel.">
-      
-      <label class="lbl">Baustelle / Einsatzort</label>
-      <input type="text" id="pruefOrt" list="baustellen" placeholder="z.B. Baustelle XY">
-      
-      <label class="lbl">Prüfgerät 1</label>
-      <input type="text" id="pruefGeraet1" placeholder="z.B. Multimeter">
-      
-      <label class="lbl">Gültig bis (Kalibrierung)</label>
-      <input type="date" id="pruefGeraet1Kalib">
-      
-      <label class="lbl">Prüfgerät 2 (PV-Spezial)</label>
-      <input type="text" id="pruefGeraetPV" placeholder="z.B. PV-Prüftester">
-      
-      <label class="lbl">Gültig bis</label>
-      <input type="date" id="pruefGeraetPVKalib">
-      
-      <label class="lbl">Prüfergebnis</label>
-      <select id="pruefErgebnis">
-        <option value="">-- Auswählen --</option>
-        <option value="bestanden">✓ Bestanden</option>
-        <option value="mangel">⚠ Mit Mangel</option>
-        <option value="nicht-bestanden">✗ Nicht bestanden</option>
-      </select>
-      
-      <label class="lbl">Besonderheiten / Mängel</label>
-      <textarea id="pruefBesonderheiten" placeholder="Festgestellte Mängel, Besonderheiten..."></textarea>
-
-      <!-- UNTERSCHRIFT SEKTION -->
-      <div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:8px;padding:12px;margin:12px 0">
-        <div style="font-weight:600;margin-bottom:8px">✍ Unterschrift Prüfer</div>
-        <canvas id="sigCanvas" class="sig-container" width="340" height="100"></canvas>
-        <div class="sig-controls">
-          <button class="btn" onclick="clearSig()">🔄 Löschen</button>
-          <button class="btn suc" onclick="savePruef()">✓ Speichern</button>
+      <div id="zeitBlock">
+        <div class="r2">
+          <div><span class="lbl">Start</span><input type="time" id="eingStart" value="08:00" onchange="calcNetto()"></div>
+          <div><span class="lbl">Ende</span><input type="time" id="eingEnd" value="16:30" onchange="calcNetto()"></div>
+        </div>
+        <span class="lbl">Pause (Min.)</span>
+        <select id="eingPause" onchange="calcNetto()">
+          <option value="0">0</option><option value="15">15</option><option value="30" selected>30</option>
+          <option value="45">45</option><option value="60">60</option><option value="90">90</option>
+        </select>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:8px;background:#f5f5f5;border-radius:8px">
+          <span style="font-size:12px;color:#666">Netto berechnet:</span>
+          <span style="font-size:18px;font-weight:700" id="nettoCalc">8,00 h</span>
         </div>
       </div>
-    </div>
-
-    <!-- Prüfprotokolle Übersicht -->
-    <div class="card">
-      <div class="sec">Gespeicherte Prüfprotokolle</div>
-      <div id="pruefList"></div>
-    </div>
-  </div>
-
-  <!-- MONAT TAB -->
-  <div class="tab" id="tab-monat">
-    <div class="card">
-      <div class="sec">Monatsübersicht</div>
-      <div class="m2">
-        <button class="btn" onclick="prevMonth()">← Vorheriger</button>
-        <div style="display:flex;align-items:center;justify-content:center;gap:4px">
-          <select id="monthSelect" onchange="changeMonth()" style="flex:1">
-            <option value="0">Januar</option>
-            <option value="1">Februar</option>
-            <option value="2">März</option>
-            <option value="3">April</option>
-            <option value="4">Mai</option>
-            <option value="5">Juni</option>
-            <option value="6">Juli</option>
-            <option value="7">August</option>
-            <option value="8">September</option>
-            <option value="9">Oktober</option>
-            <option value="10">November</option>
-            <option value="11">Dezember</option>
-          </select>
-          <input type="number" id="yearSelect" onchange="changeMonth()" min="2020" style="flex:0.6;padding:7px 10px">
-        </div>
-        <button class="btn" onclick="nextMonth()">Nächster →</button>
-      </div>
-      <div id="monthData"></div>
+      <span class="lbl">Einsatzort / Baustelle</span>
+      <input type="text" id="eingOrt" placeholder="z.B. Baustelle Musterstr. 5">
+      <span class="lbl">Notiz</span>
+      <textarea id="eingNotiz" placeholder="Optional..."></textarea>
       <div class="brow" style="margin-top:12px">
-        <button class="btn inf" onclick="exportPDF()">📄 PDF</button>
-        <button class="btn inf" onclick="exportCSV()">📊 CSV</button>
+        <button class="btn pri" onclick="saveEntry()">✓ Speichern</button>
+        <button class="btn dan" onclick="clearEntry()">✕ Leeren</button>
       </div>
     </div>
   </div>
 
-  <!-- ARBEITGEBER TAB -->
-  <div class="tab agOnly" id="tab-ag">
+  <!-- FOTOS / BAUDOKUMENTATION -->
+  <div class="tab" id="tab-fotos">
+    <!-- Upload Bereich -->
     <div class="card">
-      <div class="sec">👔 Arbeitgeber-Verwaltung</div>
-      
-      <label class="lbl">Unternehmensname</label>
-      <input type="text" id="agFirma">
-      
-      <label class="lbl">Straße</label>
-      <input type="text" id="agStr">
-      
+      <div class="sec">📸 Foto aufnehmen / hochladen</div>
+      <div id="agFotoMaRow" style="display:none;margin-bottom:8px">
+        <span class="lbl">Mitarbeiter</span><select id="fotoMA"></select>
+      </div>
+      <span class="lbl">Baustelle / Ort</span>
+      <input type="text" id="fotoBaustelle" placeholder="z.B. Baustelle Musterstr. 5">
+      <span class="lbl">Notiz zum Foto</span>
+      <input type="text" id="fotoNotiz" placeholder="z.B. Dach fertig, Fundament gegossen...">
+
+      <input type="file" id="fotoInput" accept="image/*" capture="environment" style="display:none" multiple onchange="handleFotos(this.files)">
+
+      <div class="foto-upload-box" id="uploadBox" onclick="document.getElementById('fotoInput').click()">
+        <div style="font-size:32px;margin-bottom:6px">📷</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:3px">Kamera öffnen / Foto wählen</div>
+        <div style="font-size:12px;color:#888">Tippe hier oder ziehe Fotos rein</div>
+      </div>
+      <div class="upload-progress" id="uploadProgress">
+        <div class="upload-bar" id="uploadBar" style="width:0%"></div>
+      </div>
+      <div id="uploadStatus" style="font-size:12px;color:#888;margin-top:6px;text-align:center"></div>
+
+      <!-- Vorschau vor Upload -->
+      <div id="previewGrid" class="foto-grid" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Galerie -->
+    <div id="galerie">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:14px;font-weight:600">Baudokumentation</div>
+        <div id="agGalerieFilter" style="display:none">
+          <select id="galFilterMA" onchange="renderGalerie()" style="font-size:12px;padding:4px 8px">
+            <option value="-1">Alle Mitarbeiter</option>
+          </select>
+        </div>
+      </div>
+      <div id="galerieContent"></div>
+    </div>
+  </div>
+
+  <!-- MONAT -->
+  <div class="tab" id="tab-monat">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <button class="btn" style="flex:0;padding:8px 12px;font-size:16px" onclick="changeMonth(-1)">‹</button>
+      <div style="flex:1;text-align:center;font-size:15px;font-weight:600" id="monthTitle">—</div>
+      <button class="btn" style="flex:0;padding:8px 12px;font-size:16px" onclick="changeMonth(1)">›</button>
+    </div>
+    <div id="agMaFilter" style="display:none;margin-bottom:10px">
+      <select id="filterMA" onchange="renderMonth()" style="width:100%"></select>
+    </div>
+    <div class="m2">
+      <div class="met"><div class="ml">Monat Stunden</div><div class="mv" id="mStd">0,00 h</div></div>
+      <div class="met"><div class="ml">Überstunden</div><div class="mv g" id="mUeber">+0,00 h</div></div>
+    </div>
+    <div class="m2">
+      <div class="met"><div class="ml">Urlaub übrig</div><div class="mv a" id="mUrl">—</div></div>
+      <div class="met"><div class="ml">Krank (Monat)</div><div class="mv r" id="mKrank">0</div></div>
+    </div>
+    <div class="card">
+      <div class="sec">Einträge</div>
+      <div id="monthEntries"></div>
+    </div>
+    <div class="brow">
+      <button class="btn" onclick="openExportModal()">📄 PDF</button>
+      <button class="btn" onclick="openExportModal('csv')">📊 CSV</button>
+    </div>
+
+    <!-- Export Dialog -->
+    <div id="exportModalWrap" class="modal-ov">
+      <div class="modal-in">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:600">Arbeitszeiten exportieren</div>
+          <button class="btn" style="flex:0;padding:4px 10px" onclick="closeExportModal()">✕</button>
+        </div>
+        <div style="background:#eff6ff;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:#1e40af">
+          ℹ️ Alle erfassten Arbeitszeiten sind dauerhaft gespeichert. Wählen Sie einen Zeitraum:
+        </div>
+        <label class="lbl" style="margin-top:0">Vordefinierte Monate</label>
+        <select id="exportPreset" onchange="updateExportPreset()" style="width:100%;margin-bottom:12px">
+          <option value="">-- Aktueller Monat --</option>
+          <option value="all">Alle Monate (kompletter Auszug)</option>
+          <option value="last3">Letzte 3 Monate</option>
+          <option value="last6">Letzte 6 Monate</option>
+          <option value="custom">Eigener Zeitraum...</option>
+        </select>
+        <div id="exportCustom" style="display:none">
+          <label class="lbl">Zeitraum wählen</label>
+          <div class="r2" style="margin-bottom:12px">
+            <div>
+              <span class="lbl" style="margin-bottom:6px;display:block;font-size:10px;color:#666">Von Datum:</span>
+              <input type="date" id="exportFromDate">
+            </div>
+            <div>
+              <span class="lbl" style="margin-bottom:6px;display:block;font-size:10px;color:#666">Bis Datum:</span>
+              <input type="date" id="exportToDate">
+            </div>
+          </div>
+        </div>
+        <div class="brow" style="gap:6px;margin-top:14px">
+          <button class="btn pri" id="exportBtn" style="flex:1" onclick="executeExport()">📄 Exportieren</button>
+          <button class="btn" onclick="closeExportModal()" style="flex:0">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARBEITGEBER -->
+  <div class="tab" id="tab-ag">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:15px;font-weight:600">Arbeitgeber-Panel</div>
+        <span class="bdg p">Admin</span>
+      </div>
+      <div class="sec">Firmendaten</div>
+      <span class="lbl">Firmenname</span><input type="text" id="agFirma" placeholder="Muster GmbH" onchange="saveFirma()">
       <div class="r2">
-        <div>
-          <label class="lbl">PLZ</label>
-          <input type="text" id="agPlz">
-        </div>
-        <div>
-          <label class="lbl">Ort</label>
-          <input type="text" id="agOrt">
-        </div>
+        <div><span class="lbl">Straße</span><input type="text" id="agStr" placeholder="Musterstr. 1" onchange="saveFirma()"></div>
+        <div><span class="lbl">PLZ / Ort</span><input type="text" id="agPlz" placeholder="10115 Berlin" onchange="saveFirma()"></div>
       </div>
-      
-      <button class="btn pri" onclick="saveFirma()" style="margin-top:12px">💾 Speichern</button>
+      <button class="btn pri" style="width:100%;margin-top:10px" onclick="saveFirma();alert('Gespeichert!')">✓ Speichern</button>
     </div>
 
     <div class="card">
-      <div class="sec">🔧 System-Info</div>
-      <div class="debug-panel">
-        <div class="debug-row">
-          <span>Firebase-Verbindung</span>
-          <span><span class="debug-status" id="debugFirebase"></span><span id="debugFirebaseText">--</span></span>
-        </div>
-        <div class="debug-row">
-          <span>Einträge lokal</span>
-          <span id="debugEntries">0</span>
-        </div>
-        <div class="debug-row">
-          <span>Prüfprotokolle</span>
-          <span id="debugPruef">0</span>
-        </div>
-        <div class="debug-row">
-          <span>Letzte Cloud-Sync</span>
-          <span id="debugCloudSync">--:--</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="sec" style="margin:0">Mitarbeiter (<span id="maCount">0</span>)</div>
+        <button class="btn inf" style="flex:0;font-size:12px;padding:6px 12px" onclick="openNewMA()">+ Neu anlegen</button>
+      </div>
+      <div id="maModalWrap" class="modal-ov">
+        <div class="modal-in">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:14px;font-weight:600" id="maModalTitle">Neuer Mitarbeiter</div>
+            <button class="btn" style="flex:0;padding:4px 10px" onclick="closeModal()">✕</button>
+          </div>
+          <div class="r2">
+            <div><span class="lbl">Vorname *</span><input type="text" id="maVN" placeholder="Anna"></div>
+            <div><span class="lbl">Nachname *</span><input type="text" id="maNL" placeholder="Müller"></div>
+          </div>
+          <span class="lbl">Position</span><input type="text" id="maRolle" placeholder="z.B. Maurer, Elektriker">
+          <span class="lbl">E-Mail</span><input type="email" id="maEmail" placeholder="anna@firma.de">
+          <span class="lbl">Telefon</span><input type="text" id="maTel" placeholder="+49 170 000000">
+          <div class="r2">
+            <div><span class="lbl">Wochenstunden</span><input type="number" id="maWoche" value="35"></div>
+            <div><span class="lbl">Tages-Soll (h)</span><input type="number" id="maSoll" value="7"></div>
+          </div>
+          <div class="r2">
+            <div><span class="lbl">Urlaubstage/Jahr</span><input type="number" id="maUrlaub" value="24"></div>
+            <div><span class="lbl">Eintrittsdatum</span><input type="date" id="maEintritt"></div>
+          </div>
+          <div style="background:#fef3c7;border-radius:8px;padding:10px;margin-top:10px;font-size:12px;color:#92400e">
+            🔑 <strong>Login-PIN (4-stellig)</strong>
+          </div>
+          <input type="number" id="maPin" placeholder="z.B. 5678" style="margin-top:6px;letter-spacing:6px;font-size:18px;text-align:center">
+          <span class="lbl">Notiz</span><textarea id="maNotiz" placeholder="Optional..."></textarea>
+          <div class="brow" style="margin-top:12px">
+            <button class="btn pri" onclick="saveMA()">✓ Speichern</button>
+            <button class="btn dan" onclick="closeModal()">✕ Abbrechen</button>
+          </div>
         </div>
       </div>
-      <div style="margin-bottom:12px;padding:8px;background:#eff6ff;border-radius:8px;font-size:12px;color:#1e40af" id="debugMessages"></div>
-      <button class="btn inf" onclick="forceSync()">☁ Force Sync</button>
-      <button class="btn inf" onclick="downloadBackup()" style="margin-top:6px">💾 JSON-Backup</button>
+      <div id="maListe"></div>
+    </div>
+
+    <div class="card">
+      <div class="sec">🔍 Daten-Diagnose (Debug-Panel)</div>
+      <div style="background:#f0f0f0;border-radius:8px;padding:12px;margin-bottom:12px;font-size:11px;font-family:monospace">
+        <div style="margin-bottom:8px">
+          <strong>Gesamte Einträge:</strong> <span id="debugTotalEntries">0</span>
+        </div>
+        <div style="margin-bottom:8px">
+          <strong>Firebase Status:</strong> <span id="debugFirebaseStatus">❌ Nicht verbunden</span>
+        </div>
+        <div style="margin-bottom:8px">
+          <strong>Cloud-Sync:</strong> <span id="debugCloudSync">Wird überprüft...</span>
+        </div>
+        <div id="debugAvailableMonths" style="margin-top:12px;line-height:1.6">
+          <strong>Verfügbare Monate:</strong><br>
+          <span style="color:#666">Wird geladen...</span>
+        </div>
+      </div>
+      <div class="brow" style="gap:6px">
+        <button class="btn inf" onclick="refreshDebugPanel()">🔄 Aktualisieren</button>
+        <button class="btn warn" onclick="forceCloudSync()">☁️ Cloud sync erzwingen</button>
+        <button class="btn suc" onclick="downloadFullBackup()">⬇️ Backup laden</button>
+      </div>
+    </div>
+      <div style="background:#fef3c7;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:8px">
+        🔑 Aktueller Arbeitgeber-PIN: <strong id="currentPinDisplay">****</strong>
+      </div>
+      <div class="r2">
+        <div><span class="lbl">Neuer PIN (4-stellig)</span><input type="password" id="newAgPin" maxlength="4" placeholder="z.B. 9876" inputmode="numeric" pattern="[0-9]*"></div>
+        <div><span class="lbl">PIN wiederholen</span><input type="password" id="newAgPin2" maxlength="4" placeholder="z.B. 9876" inputmode="numeric" pattern="[0-9]*"></div>
+      </div>
+      <button class="btn warn" style="width:100%;margin-top:8px" onclick="saveAgPin()">🔑 Arbeitgeber-PIN ändern</button>
+      <div class="divider"></div>
+      <div class="r2">
+        <div><span class="lbl">Minusstunden</span><select><option>Erlaubt</option><option>Gesperrt</option></select></div>
+        <div><span class="lbl">Pause Pflichtfeld</span><select><option>Nein</option><option>Ja</option></select></div>
+      </div>
+      <button class="btn pri" style="width:100%;margin-top:10px" onclick="alert('Einstellungen gespeichert!')">⚙ Einstellungen speichern</button>
+    </div>
+
+    <div class="card">
+      <div class="sec">Datenverwaltung</div>
+      <div class="brow">
+       <button class="btn" onclick="exportBackup()">⬇ Backup</button>
+<button class="btn" onclick="document.getElementById('importFile').click()">⬆ Import</button>
+<input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)">
+      </div>
+      <button class="btn dan" style="width:100%;margin-top:7px" onclick="deleteAllEntries()">🗑 Alle Einträge löschen</button>
+    </div>
+    <div style="text-align:center;margin-top:8px">
+      <button class="btn dan" style="display:inline-flex;max-width:180px" onclick="logout()">🚪 Abmelden</button>
     </div>
   </div>
 
-  <!-- PROFIL TAB -->
+  <!-- PROFIL -->
   <div class="tab" id="tab-profil">
     <div class="card">
-      <div class="sec">👤 Profil</div>
-      <div id="profileInfo"></div>
-      <button class="btn dan" onclick="logout()" style="margin-top:12px">🚪 Abmelden</button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div class="avt" id="profilAvt" style="background:#dbeafe;color:#1e40af;width:50px;height:50px;font-size:17px">—</div>
+        <div>
+          <div style="font-weight:600;font-size:16px" id="profilName">—</div>
+          <div style="font-size:12px;color:#888" id="profilRolle">—</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec" style="margin-top:10px">Mein PIN ändern</div>
+      <div class="r2">
+        <div><span class="lbl">Neuer PIN</span><input type="number" id="newMaPin" maxlength="4" placeholder="4-stellig"></div>
+        <div><span class="lbl">Wiederholen</span><input type="number" id="newMaPin2" maxlength="4" placeholder="4-stellig"></div>
+      </div>
+      <button class="btn pri" style="width:100%;margin-top:10px" onclick="changeMaPin()">🔑 PIN ändern</button>
+    </div>
+    <div class="card">
+      <div class="sec">Urlaubskonto</div>
+      <div class="m2">
+        <div class="met"><div class="ml">Genommen</div><div class="mv" id="urlaubGen">—</div></div>
+        <div class="met"><div class="ml">Übrig</div><div class="mv g" id="urlaubUbr">—</div></div>
+      </div>
+      <div class="sbar"><div class="sfill" id="urlaubBar" style="width:0%;background:#16a34a"></div></div>
+      <div style="font-size:11px;color:#888;margin-top:4px" id="urlaubText">—</div>
+    </div>
+    <div style="text-align:center;margin-top:8px">
+      <button class="btn dan" style="display:inline-flex;max-width:180px" onclick="logout()">🚪 Abmelden</button>
     </div>
   </div>
 </div>
 
 <script>
-// ============ KONFIGURATION ============
-const FIREBASE_CONFIG={
-  apiKey:"AIzaSyAzQiFuH3yAd5jpD8xVegSs2UwT6pLTHEE",
-  authDomain:"arbeitszeit-app-101d8.firebaseapp.com",
-  projectId:"arbeitszeit-app-101d8",
-  storageBucket:"arbeitszeit-app-101d8.appspot.com",
-  messagingSenderId:"123456789",
-  appId:"1:123456789:web:abc123def456"
+// ============================================================
+//  FIREBASE KONFIGURATION  —  HIER DEINE WERTE EINTRAGEN
+// ============================================================
+// Diese 6 Werte bekommst du in der Firebase-Konsole:
+//   Projekt -> Projekteinstellungen -> "Deine Apps" -> Web-App -> Config
+// Solange hier noch "HIER_..." steht, laeuft die App nur lokal
+// (wie vorher) und synchronisiert NICHT.
+var FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBwYkqEUxnouPBW1rm8aZg05oB_C451_3s",
+  authDomain:        "arbeitszeit-app-101d8.firebaseapp.com",
+  projectId:         "arbeitszeit-app-101d8",
+  storageBucket:     "arbeitszeit-app-101d8.firebasestorage.app",
+  messagingSenderId: "142516337313",
+  appId:             "1:142516337313:web:659b7c10a9eba75be80ee0"
 };
-const COMPANY_ID="firma1";
-const STORAGE_KEY="arbeitszeit_v7";
+// Firmen-Code: alle Geraete mit demselben Code teilen dieselben Daten.
+// Du kannst das so lassen, oder fuer mehrere getrennte Firmen aendern.
+var COMPANY_ID = "firma1";
 
-// ============ GLOBALE VARIABLEN ============
-let APP_PIN="0000",currentUser=null,isAdminMode=false;
-let employees=[],entries=[],pruefprotokolle=[],fotos=[],firma={name:"",str:"",plz:"",ort:""};
-let firebaseReady=false,docRef=null,applyingSnapshot=false,saveLock=0;
-let currentMonth=new Date().getMonth(),currentYear=new Date().getFullYear();
-let sigCanvas=null,sigCtx=null,isDrawing=false;
+// ============ CLOUDINARY CONFIG ============
+var CLOUD_NAME = 'ddbectnao';
+var UPLOAD_PRESET = 'personliche_arbeitsstunden';
+var CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/image/upload';
 
-const monthNames=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
-
-// ============ INITIALISIERUNG ============
-window.addEventListener('DOMContentLoaded',function(){
-  sigCanvas=document.getElementById('sigCanvas');
-  if(sigCanvas){
-    sigCtx=sigCanvas.getContext('2d');
-    sigCanvas.addEventListener('touchstart',startDraw,false);
-    sigCanvas.addEventListener('touchmove',drawSig,false);
-    sigCanvas.addEventListener('touchend',endDraw,false);
-    sigCanvas.addEventListener('mousedown',startDraw,false);
-    sigCanvas.addEventListener('mousemove',drawSig,false);
-    sigCanvas.addEventListener('mouseup',endDraw,false);
-  }
-  loadLocal();
-  initFirebase();
-  buildUserList();
-  updateVerInfo();
-});
-
-// ============ NUMPAD BUILDER (KRITISCH - WAR FEHLT!) ============
-function initNumpad(){
-  var html='';
-  for(var i=1;i<=9;i++){
-    html+='<button class="numkey" onclick="handlePin(\''+i+'\')">'+i+'</button>';
-  }
-  html+='<button class="numkey" onclick="handlePin(\'0\')">0</button>';
-  html+='<button class="numkey del" onclick="handlePin(\'del\')">← Löschen</button>';
-  document.getElementById('numpad').innerHTML=html;
-}
-
-// ============ NAVIGATION ============
-function gotoTab(t){
-  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
-  document.querySelectorAll('.nb').forEach(e=>e.classList.remove('active'));
-  document.getElementById('tab-'+t).classList.add('active');
-  event.target.classList.add('active');
-  if(t==='heute')renderToday();
-  else if(t==='monat')renderMonth();
-  else if(t==='pruef')renderPruefList();
-  else if(t==='ag')renderAgDebug();
-}
-
-// ============ LOGIN FUNKTIONEN ============
-function loginUser(id){
-  var user=employees.find(e=>e.id===id);
-  if(!user)return;
-  document.getElementById('pinStep').style.display='block';
-  document.getElementById('userStep').style.display='none';
-  document.getElementById('pinStepName').textContent='PIN für '+user.vn+' '+user.nl;
-  document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
-  pinBuffer='';
-  currentUser=id;
-  isAdminMode=false;
-  initNumpad();  // ← WICHTIG: Numpad bauen!
-}
-
-function showAdminLogin(){
-  document.getElementById('pinStep').style.display='block';
-  document.getElementById('userStep').style.display='none';
-  document.getElementById('pinStepName').textContent='Admin-PIN eingeben';
-  document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
-  pinBuffer='';
-  currentUser=null;
-  isAdminMode=true;
-  initNumpad();  // ← WICHTIG: Numpad bauen!
-}
-
-function backToUserList(){
-  document.getElementById('userStep').style.display='block';
-  document.getElementById('pinStep').style.display='none';
-  pinBuffer='';
-}
-
-function handlePin(digit){
-  if(digit==='del'){
-    pinBuffer=pinBuffer.slice(0,-1);
-    document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(x=>x.classList.remove('filled'));
-    pinBuffer.split('').forEach((p,i)=>{document.getElementById('d'+i).classList.add('filled');});
-    return;
-  }
-  if(pinBuffer.length<4){
-    pinBuffer+=digit;
-    document.getElementById('d'+pinBuffer.length-1).classList.add('filled');
-  }
-  if(pinBuffer.length===4){
-    checkPin();
-  }
-}
-
+// ============ STATE ============
+var APP_PIN = '1234';
+var employees = [
+  {vn:'Max',nl:'Mustermann',rolle:'Maurer',email:'max@firma.de',tel:'',woche:35,urlaub:24,soll:7,eintritt:'2023-01-01',notiz:'',pin:'1111'},
+  {vn:'Laura',nl:'Schmidt',rolle:'Elektrikerin',email:'laura@firma.de',tel:'',woche:35,urlaub:28,soll:7,eintritt:'2022-06-15',notiz:'',pin:'2222'}
+];
+var entries = [];
+var fotos = []; // {ma, url, baustelle, notiz, datum, zeit}
+var firma = {name:'',str:'',plz:''};
+var currentUser = null;
+var currentMonth, currentYear;
+var timerSec=0, timerRunning=false, timerInt=null, pauseMins=0;
+var editingMaIdx=-1;
+var loginTarget=null;
 var pinBuffer='';
-function checkPin(){
-  var correctPin=isAdminMode?APP_PIN:employees.find(e=>e.id===currentUser)?.pin;
-  if(pinBuffer===correctPin){
-    document.getElementById('loginScreen').style.display='none';
-    document.getElementById('mainApp').style.display='block';
-    renderToday();
-    updateVerInfo();
-    if(isAdminMode){
-      document.querySelectorAll('.agOnly').forEach(e=>e.style.display='flex');
-      renderAgDebug();
-    }
-  }else{
-    document.getElementById('pinError').textContent='❌ PIN falsch!';
-    setTimeout(()=>{
-      document.getElementById('pinError').textContent='';
-      document.getElementById('pinDots').querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('filled'));
-      pinBuffer='';
-    },1500);
+var STORAGE_KEY='arbeitszeit_app_data';
+
+// ---- Firebase Laufzeit-Status ----
+var firebaseReady=false;   // true, sobald Verbindung steht
+var docRef=null;           // Verweis auf das Firmen-Dokument
+var applyingSnapshot=false;// verhindert Schleifen beim Empfangen
+var saveLock=0;            // Snapshots nach lokalem Speichern ignorieren (ms)
+
+var eColors={arbeit:'#16a34a',urlaub:'#2563eb',krank:'#dc2626',feiertag:'#d97706',schule:'#7c3aed',sonder:'#888'};
+var eLabels={arbeit:'Arbeit',urlaub:'Urlaub',krank:'Krank',feiertag:'Feiertag',schule:'Schule',sonder:'Sonderfall'};
+var eBdg={arbeit:'g',urlaub:'b',krank:'r',feiertag:'a',schule:'n',sonder:'n'};
+var avatarBg=['#dbeafe','#dcfce7','#fef3c7','#fce7f3','#f3e8ff','#e0f2fe'];
+var avatarFg=['#1e40af','#166534','#92400e','#9d174d','#6b21a8','#0369a1'];
+
+function pad(n){return String(n).padStart(2,'0');}
+function todayStr(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function fmtH(s){return pad(Math.floor(s/3600))+':'+pad(Math.floor(s%3600/60))+':'+pad(s%60);}
+function getInitials(vn,nl){return ((vn||'')[0]||'').toUpperCase()+((nl||'')[0]||'').toUpperCase();}
+function isAG(){return currentUser&&currentUser.type==='ag';}
+function activeMaIdx(){return currentUser&&currentUser.type==='ma'?currentUser.idx:-1;}
+
+// ============ LOGIN ============
+function buildUserList(){
+  var ul=document.getElementById('userList');
+  ul.innerHTML=employees.map(function(ma,i){
+    var ci=i%6;
+    return '<div class="user-item" onclick="selectUser('+i+')">'
+      +'<div class="avt" style="background:'+avatarBg[ci]+';color:'+avatarFg[ci]+'">'+getInitials(ma.vn,ma.nl)+'</div>'
+      +'<div><div style="font-weight:600;font-size:14px">'+ma.vn+' '+ma.nl+'</div>'
+      +'<div style="font-size:12px;color:#888">'+ma.rolle+'</div></div></div>';
+  }).join('');
+}
+function selectUser(idx){loginTarget={type:'ma',idx:idx};document.getElementById('pinStepName').textContent=employees[idx].vn+' '+employees[idx].nl;showPinStep();}
+function showAdminLogin(){loginTarget={type:'ag'};document.getElementById('pinStepName').textContent='Arbeitgeber-Login';showPinStep();}
+function showPinStep(){pinBuffer='';updatePinDots();document.getElementById('pinError').textContent='';document.getElementById('userStep').style.display='none';document.getElementById('pinStep').style.display='block';buildNumpad();}
+function backToUserList(){document.getElementById('pinStep').style.display='none';document.getElementById('userStep').style.display='block';}
+function buildNumpad(){var np=document.getElementById('numpad');np.innerHTML=['1','2','3','4','5','6','7','8','9','','0','del'].map(function(k){if(k==='')return '<div class="numkey empty"></div>';if(k==='del')return '<div class="numkey del" onclick="pinDel()">⌫</div>';return '<div class="numkey" onclick="pinPress(\''+k+'\')">'+k+'</div>';}).join('');}
+function pinPress(d){if(pinBuffer.length>=4)return;pinBuffer+=d;updatePinDots();if(pinBuffer.length===4)setTimeout(checkLogin,120);}
+function pinDel(){if(pinBuffer.length>0)pinBuffer=pinBuffer.slice(0,-1);updatePinDots();document.getElementById('pinError').textContent='';}
+function updatePinDots(){for(var i=0;i<4;i++){document.getElementById('d'+i).className='pin-dot'+(i<pinBuffer.length?' filled':'');}}
+function checkLogin(){
+  var ok=false;
+  if(loginTarget.type==='ag'&&pinBuffer===APP_PIN)ok=true;
+  if(loginTarget.type==='ma'){var ma=employees[loginTarget.idx];if(ma&&pinBuffer===String(ma.pin))ok=true;}
+  if(ok){currentUser=loginTarget;document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').style.display='block';initApp();}
+  else{document.getElementById('pinError').textContent='Falscher PIN.';document.getElementById('pinDots').classList.add('shake');setTimeout(function(){document.getElementById('pinDots').classList.remove('shake');},400);pinBuffer='';updatePinDots();}
+}
+function logout(){currentUser=null;pinBuffer='';timerSec=0;pauseMins=0;timerRunning=false;clearInterval(timerInt);document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('pinStep').style.display='none';document.getElementById('userStep').style.display='block';buildUserList();}
+
+// ============ INIT ============
+function initApp(){
+  var now=new Date();
+  currentMonth=now.getMonth();currentYear=now.getFullYear();
+  var days=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+  var months2=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  document.getElementById('todayDate').textContent=days[now.getDay()]+', '+now.getDate()+'. '+months2[now.getMonth()]+' '+now.getFullYear();
+  var start=new Date(now.getFullYear(),0,1);
+  var kw=Math.ceil(((now-start)/86400000+start.getDay()+1)/7);
+  document.getElementById('kwLabel').textContent='KW '+kw;
+  document.getElementById('eingDat').value=todayStr();
+  // Firmendaten in Felder laden
+  document.getElementById('agFirma').value=firma.name||'';
+  document.getElementById('agStr').value=firma.str||'';
+  document.getElementById('agPlz').value=firma.plz||'';
+  document.getElementById('currentPinDisplay').textContent=APP_PIN;
+  if(isAG()){
+    document.querySelectorAll('.agOnly').forEach(function(el){el.style.display='';});
+    document.getElementById('maSelectRow').style.display='block';
+    document.getElementById('agMaFilter').style.display='block';
+    document.getElementById('agFotoMaRow').style.display='block';
+    document.getElementById('agGalerieFilter').style.display='block';
+    document.getElementById('activeMaName').textContent='Arbeitgeber-Ansicht';
+    document.getElementById('profilName').textContent='Arbeitgeber';
+    document.getElementById('profilRolle').textContent='Admin';
+    document.getElementById('profilAvt').textContent='AG';
+    renderMASelect();renderAgFilterSelect();renderMAListe();renderFotoMASelect();renderGalFilterSelect();
+  } else {
+    document.querySelectorAll('.agOnly').forEach(function(el){el.style.display='none';});
+    document.getElementById('maSelectRow').style.display='none';
+    document.getElementById('agMaFilter').style.display='none';
+    document.getElementById('agFotoMaRow').style.display='none';
+    document.getElementById('agGalerieFilter').style.display='none';
+    var ma=employees[activeMaIdx()];
+    document.getElementById('activeMaName').textContent=ma.vn+' '+ma.nl;
+    document.getElementById('profilName').textContent=ma.vn+' '+ma.nl;
+    document.getElementById('profilRolle').textContent=ma.rolle;
+    document.getElementById('profilAvt').textContent=getInitials(ma.vn,ma.nl);
+    updateUrlaubKonto();
   }
-}
+  gotoTab('heute');renderRecent();renderMonth();renderGalerie();
 
-// ============ PRÜFPROTOKOLL FUNKTIONEN ============
-function savePruef(){
-  var pruef={
-    id:'p_'+Date.now(),
-    datum:document.getElementById('pruefDatum').value,
-    typ:document.getElementById('pruefTyp').value,
-    auftragsgeber:document.getElementById('pruefAuftragsgeber').value,
-    kontakt:document.getElementById('pruefKontakt').value,
-    ort:document.getElementById('pruefOrt').value,
-    geraet1:document.getElementById('pruefGeraet1').value,
-    geraet1Kalib:document.getElementById('pruefGeraet1Kalib').value,
-    geraetPV:document.getElementById('pruefGeraetPV').value,
-    geraetPVKalib:document.getElementById('pruefGeraetPVKalib').value,
-    ergebnis:document.getElementById('pruefErgebnis').value,
-    besonderheiten:document.getElementById('pruefBesonderheiten').value,
-    sig:sigCanvas.toDataURL(),
-    ma:currentUser
-  };
-  pruefprotokolle.push(pruef);
-  saveData();
-  alert('✓ Prüfprotokoll gespeichert!');
-  clearSig();
-  document.getElementById('pruefDatum').value='';
-  document.getElementById('pruefTyp').value='';
-  document.getElementById('pruefAuftragsgeber').value='';
-  document.getElementById('pruefKontakt').value='';
-  document.getElementById('pruefOrt').value='';
-  document.getElementById('pruefGeraet1').value='';
-  document.getElementById('pruefGeraet1Kalib').value='';
-  document.getElementById('pruefGeraetPV').value='';
-  document.getElementById('pruefGeraetPVKalib').value='';
-  document.getElementById('pruefErgebnis').value='';
-  document.getElementById('pruefBesonderheiten').value='';
-  renderPruefList();
-}
-
-function renderPruefList(){
-  var html='';
-  pruefprotokolle.forEach(p=>{
-    var statusClass=p.ergebnis==='bestanden'?'g':(p.ergebnis==='mangel'?'a':'r');
-    html+='<div class="pruef-card '+statusClass+'">'+
-          '<div class="pruef-date">'+p.datum+'</div>'+
-          '<div class="pruef-status">'+p.ort+' · '+p.auftragsgeber+'</div>'+
-          '</div>';
-  });
-  document.getElementById('pruefList').innerHTML=html||'<div style="color:#888;font-size:12px">Noch keine Prüfprotokolle.</div>';
-}
-
-function startDraw(e){
-  isDrawing=true;
-  var rect=sigCanvas.getBoundingClientRect();
-  var x=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
-  var y=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
-  sigCtx.beginPath();
-  sigCtx.moveTo(x,y);
-}
-
-function drawSig(e){
-  if(!isDrawing)return;
-  var rect=sigCanvas.getBoundingClientRect();
-  var x=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
-  var y=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
-  sigCtx.lineTo(x,y);
-  sigCtx.stroke();
-}
-
-function endDraw(){
-  isDrawing=false;
-}
-
-function clearSig(){
-  sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height);
-}
-
-function renderAgDebug(){
-  var debugInfo='';
-  debugInfo+='<div style="margin-bottom:12px"><strong>Firma:</strong> '+firma.name+'</div>';
-  debugInfo+='<div style="margin-bottom:12px"><strong>Mitarbeiter:</strong> '+employees.length+'</div>';
-  var entryCount=entries.filter(e=>new Date(e.datum).getMonth()===currentMonth).length;
-  debugInfo+='<div><strong>Einträge diesen Monat:</strong> '+entryCount+'</div>';
+  // drag & drop
+  var ub=document.getElementById('uploadBox');
+  ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
+  ub.addEventListener('dragleave',function(){ub.classList.remove('dragover');});
+  ub.addEventListener('drop',function(e){e.preventDefault();ub.classList.remove('dragover');handleFotos(e.dataTransfer.files);});
   
-  document.getElementById('debugEntries').textContent=entries.length;
-  document.getElementById('debugPruef').textContent=pruefprotokolle.length;
-  document.getElementById('debugFirebase').className='debug-status '+(firebaseReady?'ok':'warn');
-  document.getElementById('debugFirebaseText').textContent=firebaseReady?'✓ Verbunden':'⏳ Offline';
+  // Debug Panel initialisieren
+  initDebugPanel();
 }
 
-function forceSync(){
-  if(firebaseReady && docRef){
-    document.getElementById('debugMessages').textContent='Synchronisierung läuft...';
-    docRef.set({APP_PIN,employees,entries,pruefprotokolle,fotos,firma,savedAt:new Date().toISOString()})
-      .then(()=>{
-        document.getElementById('debugMessages').textContent='✓ Sync erfolgreich!';
-        setTimeout(()=>document.getElementById('debugMessages').textContent='',2000);
-      })
-      .catch(e=>{
-        document.getElementById('debugMessages').textContent='✗ Fehler: '+e.message;
-      });
+// ============ TABS ============
+function gotoTab(id){
+  ['heute','eintrag','fotos','monat','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
+  document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('active');});
+  var tel=document.getElementById('tab-'+id);if(tel)tel.classList.add('active');
+  document.querySelectorAll('.nb').forEach(function(b){if(b.textContent.indexOf({heute:'Heute',eintrag:'Eintrag',fotos:'Fotos',monat:'Monat',ag:'Arbeitgeber',profil:'Profil'}[id]||'')>=0)b.classList.add('active');});
+  if(id==='monat')renderMonth();
+  if(id==='fotos')renderGalerie();
+  if(id==='profil')updateUrlaubKonto();
+}
+
+// ============ TIMER ============
+function getSoll(){if(isAG())return 7;var ma=employees[activeMaIdx()];return ma?ma.soll:7;}
+function getWoche(){if(isAG())return 35;var ma=employees[activeMaIdx()];return ma?ma.woche:35;}
+
+function startTimer(){
+  if(timerRunning)return;timerRunning=true;
+  var now=new Date();
+  document.getElementById('startBtn').disabled=true;document.getElementById('stopBtn').disabled=false;
+  document.getElementById('statusBadge').className='bdg b';document.getElementById('statusBadge').textContent='● Aktiv';
+  document.getElementById('timerSub').textContent='Gestartet um '+pad(now.getHours())+':'+pad(now.getMinutes());
+  var soll=getSoll();var woche=getWoche();
+  timerInt=setInterval(function(){
+    timerSec++;document.getElementById('timerDisp').textContent=fmtH(timerSec);
+    var net=Math.max(0,(timerSec-pauseMins*60)/3600);
+    document.getElementById('todayNet').textContent=net.toFixed(2).replace('.',',')+' h';
+    var ov=net-soll;var el=document.getElementById('todayOver');
+    el.textContent=(ov>=0?'+':'')+ov.toFixed(2).replace('.',',')+' h';el.className='mv '+(ov>0?'g':(ov<0?'r':'a'));
+    var pct=Math.min(100,net/woche*100);
+    document.getElementById('weekLbl').textContent=net.toFixed(1).replace('.',',')+' / '+woche+' h';
+    document.getElementById('weekPct').textContent=Math.round(pct)+'%';
+    var bar=document.getElementById('weekBar');bar.style.width=pct+'%';
+    var amp=document.getElementById('ampel');
+    if(pct>=100){bar.style.background='#dc2626';amp.className='bdg r';amp.textContent='Limit erreicht';}
+    else if(pct>=80){bar.style.background='#d97706';amp.className='bdg a';amp.textContent='Fast voll';}
+    else{bar.style.background='#16a34a';amp.className='bdg g';amp.textContent='Auf Kurs';}
+  },1000);
+}
+function stopTimer(){if(!timerRunning)return;clearInterval(timerInt);timerRunning=false;document.getElementById('startBtn').disabled=false;document.getElementById('stopBtn').disabled=true;document.getElementById('statusBadge').className='bdg n';document.getElementById('statusBadge').textContent='Gestoppt';document.getElementById('timerSub').textContent='Gestoppt — '+fmtH(timerSec)+' erfasst';}
+function addPause(m){pauseMins+=m;alert(m+' Min Pause. Gesamt: '+pauseMins+' Min.');}
+function saveQuick(){if(timerSec===0){alert('Kein aktiver Timer.');return;}stopTimer();var net=Math.max(0,(timerSec-pauseMins*60)/3600);var maIdx=isAG()?0:activeMaIdx();entries.unshift({ma:maIdx,dat:todayStr(),typ:'arbeit',start:'--',end:'--',pause:pauseMins,ort:'',notiz:'',h:parseFloat(net.toFixed(2))});timerSec=0;pauseMins=0;document.getElementById('timerDisp').textContent='00:00:00';document.getElementById('timerSub').textContent='Nicht gestartet';document.getElementById('todayNet').textContent='0,00 h';document.getElementById('todayOver').textContent='+0,00 h';document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';renderRecent();saveData();alert('Gespeichert!');}
+
+// ============ RECENT ============
+function renderRecent(){
+  var list=document.getElementById('recentList');if(!list)return;
+  var maIdx=isAG()?null:activeMaIdx();
+  var filtered=entries.filter(function(e){return maIdx===null||e.ma===maIdx;}).slice(0,5);
+  list.innerHTML=filtered.length?filtered.map(function(e){var ma=employees[e.ma]||{vn:'?',nl:''};var ml=isAG()?' · '+ma.vn+' '+ma.nl:'';return '<div class="ent"><div class="edot" style="background:'+eColors[e.typ]+'"></div><div class="einfo"><div class="etitle">'+eLabels[e.typ]+(e.h?' — '+e.h.toFixed(2).replace('.',',')+' h':'')+'</div><div class="esub">'+e.dat+ml+(e.ort?' · '+e.ort:'')+'</div></div><span class="bdg '+eBdg[e.typ]+'">'+eLabels[e.typ]+'</span></div>';}).join(''):'<div style="color:#888;font-size:13px;padding:8px 0;text-align:center">Noch keine Einträge.</div>';
+}
+
+// ============ EINTRAG ============
+function calcNetto(){var s=document.getElementById('eingStart').value;var e=document.getElementById('eingEnd').value;var p=parseInt(document.getElementById('eingPause').value)||0;if(!s||!e){document.getElementById('nettoCalc').textContent='—';return;}var sm=parseInt(s.split(':')[0])*60+parseInt(s.split(':')[1]);var em=parseInt(e.split(':')[0])*60+parseInt(e.split(':')[1]);document.getElementById('nettoCalc').textContent=Math.max(0,(em-sm-p)/60).toFixed(2).replace('.',',')+' h';}
+function toggleTyp(){document.getElementById('zeitBlock').style.display=(document.getElementById('eingTyp').value==='arbeit'||document.getElementById('eingTyp').value==='schule')?'block':'none';}
+function renderMASelect(){var el=document.getElementById('eingMA');if(!el)return;el.innerHTML=employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
+function saveEntry(){var typ=document.getElementById('eingTyp').value;var s=document.getElementById('eingStart').value;var e=document.getElementById('eingEnd').value;var p=parseInt(document.getElementById('eingPause').value)||0;var net=0;if(typ==='arbeit'||typ==='schule'){if(!s||!e){alert('Bitte Start und Ende eingeben.');return;}var sm=parseInt(s.split(':')[0])*60+parseInt(s.split(':')[1]);var em=parseInt(e.split(':')[0])*60+parseInt(e.split(':')[1]);net=Math.max(0,(em-sm-p)/60);}var maIdx=isAG()?parseInt(document.getElementById('eingMA').value)||0:activeMaIdx();entries.unshift({ma:maIdx,dat:document.getElementById('eingDat').value,typ:typ,start:s,end:e,pause:p,ort:document.getElementById('eingOrt').value,notiz:document.getElementById('eingNotiz').value,h:parseFloat(net.toFixed(2))});renderRecent();saveData();alert('Eintrag gespeichert!');clearEntry();}
+function clearEntry(){document.getElementById('eingOrt').value='';document.getElementById('eingNotiz').value='';document.getElementById('eingStart').value='08:00';document.getElementById('eingEnd').value='16:30';document.getElementById('eingPause').value='30';calcNetto();}
+
+// ============ FOTO UPLOAD ============
+function renderFotoMASelect(){var el=document.getElementById('fotoMA');if(!el)return;el.innerHTML=employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
+function renderGalFilterSelect(){var sel=document.getElementById('galFilterMA');if(!sel)return;sel.innerHTML='<option value="-1">Alle Mitarbeiter</option>'+employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
+
+function handleFotos(files){
+  if(!files||!files.length)return;
+  var baustelle=document.getElementById('fotoBaustelle').value.trim()||'Baustelle';
+  var notiz=document.getElementById('fotoNotiz').value.trim();
+  var maIdx=isAG()?parseInt(document.getElementById('fotoMA').value)||0:activeMaIdx();
+  var total=files.length;var done=0;
+  document.getElementById('uploadProgress').style.display='block';
+  document.getElementById('uploadStatus').textContent='0 / '+total+' Fotos werden hochgeladen...';
+  Array.from(files).forEach(function(file){
+    if(!file.type.startsWith('image/')){done++;checkDone();return;}
+    var fd=new FormData();
+    fd.append('file',file);
+    fd.append('upload_preset',UPLOAD_PRESET);
+    fd.append('folder','baustelle/'+baustelle.replace(/\s+/g,'_'));
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST',CLOUDINARY_URL);
+    xhr.upload.onprogress=function(e){
+      if(e.lengthComputable){var pct=Math.round((done/total+(e.loaded/e.total)/total)*100);document.getElementById('uploadBar').style.width=pct+'%';}
+    };
+    xhr.onload=function(){
+      if(xhr.status===200){
+        var res=JSON.parse(xhr.responseText);
+        var now=new Date();
+        fotos.push({ma:maIdx,url:res.secure_url,baustelle:baustelle,notiz:notiz,datum:todayStr(),zeit:pad(now.getHours())+':'+pad(now.getMinutes()),publicId:res.public_id});
+        saveData();
+        done++;checkDone();
+      } else {
+        done++;checkDone();
+        document.getElementById('uploadStatus').textContent='Fehler beim Upload. Bitte prüfe den Preset-Namen.';
+      }
+    };
+    xhr.onerror=function(){done++;checkDone();document.getElementById('uploadStatus').textContent='Verbindungsfehler beim Upload.';};
+    xhr.send(fd);
+  });
+  function checkDone(){
+    document.getElementById('uploadBar').style.width=Math.round(done/total*100)+'%';
+    document.getElementById('uploadStatus').textContent=done+' / '+total+' Fotos hochgeladen';
+    if(done===total){
+      setTimeout(function(){document.getElementById('uploadProgress').style.display='none';document.getElementById('uploadBar').style.width='0%';document.getElementById('uploadStatus').textContent='✅ Alle Fotos erfolgreich hochgeladen!';document.getElementById('fotoBaustelle').value='';document.getElementById('fotoNotiz').value='';renderGalerie();},600);
+    }
   }
 }
 
-function downloadBackup(){
-  var backup={
-    version:'7',
-    exportedAt:new Date().toISOString(),
-    APP_PIN,employees,entries,pruefprotokolle,fotos,firma
-  };
-  var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+// ============ GALERIE ============
+function renderGalerie(){
+  var gc=document.getElementById('galerieContent');if(!gc)return;
+  var galSel=document.getElementById('galFilterMA');
+  var maFilter=(isAG()&&galSel)?parseInt(galSel.value):-1;
+  var maIdx=isAG()?maFilter:activeMaIdx();
+  var filtered=fotos.filter(function(f){return maIdx<0||f.ma===maIdx;});
+  if(!filtered.length){gc.innerHTML='<div class="card" style="text-align:center;color:#888;font-size:13px;padding:24px 0">📷 Noch keine Fotos vorhanden.<br><br>Tippe auf "Foto aufnehmen" um zu starten.</div>';return;}
+
+  // Gruppiere nach Baustelle
+  var gruppen={};
+  filtered.forEach(function(f){var k=f.baustelle||'Sonstige';if(!gruppen[k])gruppen[k]=[];gruppen[k].push(f);});
+
+  gc.innerHTML=Object.keys(gruppen).map(function(bau){
+    var gFotos=gruppen[bau];
+    var fotoHTML=gFotos.map(function(f,i){
+      var ma=employees[f.ma]||{vn:'?',nl:''};
+      return '<div class="bau-foto" onclick="openLightbox(\''+f.url+'\',\''+f.datum+' '+f.zeit+(f.notiz?' · '+f.notiz:'')+'\')"><img src="'+f.url+'" alt="Foto" loading="lazy"></div>';
+    }).join('');
+    var ma0=employees[gFotos[0].ma]||{vn:'?',nl:''};
+    var maInfo=isAG()?' · '+ma0.vn+' '+ma0.nl:'';
+    return '<div class="bau-card">'
+      +'<div class="bau-header">'
+      +'<div style="font-weight:600;font-size:14px">🏗 '+bau+'</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:2px">'+gFotos[0].datum+maInfo+' · '+gFotos.length+' Foto(s)</div>'
+      +'</div>'
+      +'<div class="bau-fotos">'+fotoHTML+'</div>'
+      +'<div class="bau-footer">'+(gFotos[0].notiz||'Keine Notiz')+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function openLightbox(url,info){document.getElementById('lightboxImg').src=url;document.getElementById('lightboxInfo').textContent=info;document.getElementById('lightbox').classList.add('open');}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.getElementById('lightboxImg').src='';}
+
+// ============ MONAT ============
+var monthNames=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+function renderAgFilterSelect(){var sel=document.getElementById('filterMA');if(!sel)return;sel.innerHTML='<option value="-1">Alle Mitarbeiter</option>'+employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
+function changeMonth(d){currentMonth+=d;if(currentMonth>11){currentMonth=0;currentYear++;}if(currentMonth<0){currentMonth=11;currentYear--;}renderMonth();}
+function renderMonth(){
+  if(!document.getElementById('monthTitle'))return;
+  document.getElementById('monthTitle').textContent=monthNames[currentMonth]+' '+currentYear;
+  var prefix=currentYear+'-'+pad(currentMonth+1);
+  var fSel=document.getElementById('filterMA');
+  var filterIdx=(isAG()&&fSel)?parseInt(fSel.value):-1;
+  var maIdx=isAG()?filterIdx:activeMaIdx();
+  var me=entries.filter(function(e){return e.dat&&e.dat.startsWith(prefix)&&(maIdx<0||e.ma===maIdx);});
+  var totalH=me.reduce(function(a,e){return a+e.h;},0);
+  var arbT=me.filter(function(e){return e.typ==='arbeit';}).length;
+  var soll=maIdx>=0?(employees[maIdx]?employees[maIdx].soll:7):7;
+  var ub=totalH-arbT*soll;
+  var krankT=me.filter(function(e){return e.typ==='krank';}).length;
+  document.getElementById('mStd').textContent=totalH.toFixed(2).replace('.',',')+' h';
+  var uEl=document.getElementById('mUeber');uEl.textContent=(ub>=0?'+':'')+ub.toFixed(2).replace('.',',')+' h';uEl.className='mv '+(ub>=0?'g':'r');
+  document.getElementById('mKrank').textContent=krankT;
+  if(!isAG()&&maIdx>=0){var ma=employees[maIdx];var urlGen=entries.filter(function(e){return e.ma===maIdx&&e.typ==='urlaub';}).length;document.getElementById('mUrl').textContent=(ma.urlaub-urlGen)+' / '+ma.urlaub;}
+  else document.getElementById('mUrl').textContent='—';
+  var mel=document.getElementById('monthEntries');
+  mel.innerHTML=me.length?me.map(function(e){var ma=employees[e.ma]||{vn:'?',nl:''};var ml=isAG()?' · '+ma.vn+' '+ma.nl:'';return '<div class="ent"><div class="edot" style="background:'+eColors[e.typ]+'"></div><div class="einfo"><div class="etitle">'+eLabels[e.typ]+(e.h?' — '+e.h.toFixed(2).replace('.',',')+' h':'')+'</div><div class="esub">'+e.dat+ml+(e.ort?' · '+e.ort:'')+'</div></div><span class="bdg '+eBdg[e.typ]+'">'+eLabels[e.typ]+'</span></div>';}).join(''):'<div style="color:#888;font-size:13px;padding:12px 0;text-align:center">Keine Einträge.</div>';
+}
+
+// ============ ARBEITGEBER ============
+function saveFirma(){firma={name:document.getElementById('agFirma').value.trim(),str:document.getElementById('agStr').value.trim(),plz:document.getElementById('agPlz').value.trim()};saveData();}
+function renderMAListe(){
+  var el=document.getElementById('maListe');if(!el)return;document.getElementById('maCount').textContent=employees.length;
+  if(!employees.length){el.innerHTML='<div style="color:#888;font-size:13px;padding:16px 0;text-align:center">Noch keine Mitarbeiter angelegt.</div>';return;}
+  el.innerHTML=employees.map(function(ma,i){var ci=i%6;return '<div class="ma-row" onclick="editMA('+i+')">'+'<div class="avt" style="background:'+avatarBg[ci]+';color:'+avatarFg[ci]+'">'+getInitials(ma.vn,ma.nl)+'</div>'+'<div class="einfo"><div class="etitle">'+ma.vn+' '+ma.nl+'</div><div class="esub">'+ma.rolle+' · PIN: ****</div>'+(ma.email?'<div class="esub" style="color:#2563eb">'+ma.email+'</div>':'')+'</div>'+'<button class="btn dan" style="flex:0;padding:5px 9px;font-size:12px" onclick="event.stopPropagation();deleteMA('+i+')">🗑</button></div>';}).join('');
+}
+function openNewMA(){editingMaIdx=-1;document.getElementById('maModalTitle').textContent='Neuer Mitarbeiter';['maVN','maNL','maRolle','maEmail','maTel','maNotiz'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('maWoche').value=35;document.getElementById('maUrlaub').value=24;document.getElementById('maSoll').value=7;document.getElementById('maEintritt').value='';document.getElementById('maPin').value='';document.getElementById('maModalWrap').classList.add('open');}
+function editMA(i){editingMaIdx=i;var ma=employees[i];document.getElementById('maModalTitle').textContent=ma.vn+' '+ma.nl+' bearbeiten';document.getElementById('maVN').value=ma.vn;document.getElementById('maNL').value=ma.nl;document.getElementById('maRolle').value=ma.rolle||'';document.getElementById('maEmail').value=ma.email||'';document.getElementById('maTel').value=ma.tel||'';document.getElementById('maWoche').value=ma.woche;document.getElementById('maUrlaub').value=ma.urlaub;document.getElementById('maSoll').value=ma.soll;document.getElementById('maEintritt').value=ma.eintritt||'';document.getElementById('maNotiz').value=ma.notiz||'';document.getElementById('maPin').value=ma.pin||'';document.getElementById('maModalWrap').classList.add('open');}
+function closeModal(){document.getElementById('maModalWrap').classList.remove('open');editingMaIdx=-1;}
+function saveMA(){var vn=document.getElementById('maVN').value.trim();var nl=document.getElementById('maNL').value.trim();var pin=String(document.getElementById('maPin').value).trim();if(!vn||!nl){alert('Vor- und Nachname sind Pflichtfelder.');return;}if(!pin||pin.length!==4||isNaN(pin)){alert('Bitte gültigen 4-stelligen PIN vergeben!');return;}if(employees.some(function(ma,i){return String(ma.pin)===pin&&i!==editingMaIdx;})){alert('PIN bereits vergeben.');return;}if(pin===APP_PIN){alert('Dieser PIN ist für den Arbeitgeber reserviert.');return;}var ma={vn:vn,nl:nl,rolle:document.getElementById('maRolle').value.trim()||'Mitarbeiter',email:document.getElementById('maEmail').value.trim(),tel:document.getElementById('maTel').value.trim(),woche:parseInt(document.getElementById('maWoche').value)||35,urlaub:parseInt(document.getElementById('maUrlaub').value)||24,soll:parseInt(document.getElementById('maSoll').value)||7,eintritt:document.getElementById('maEintritt').value,notiz:document.getElementById('maNotiz').value.trim(),pin:pin};if(editingMaIdx>=0){employees[editingMaIdx]=ma;alert('Mitarbeiter aktualisiert!');}else{employees.push(ma);alert('✅ '+vn+' '+nl+' angelegt!\nLogin-PIN: '+pin);}closeModal();saveData();renderMAListe();renderMASelect();renderAgFilterSelect();renderFotoMASelect();renderGalFilterSelect();buildUserList();}
+function deleteMA(i){if(!confirm('Mitarbeiter "'+employees[i].vn+' '+employees[i].nl+'" löschen?'))return;employees.splice(i,1);entries=entries.filter(function(e){return e.ma!==i;});fotos=fotos.filter(function(f){return f.ma!==i;});saveData();renderMAListe();renderMASelect();renderAgFilterSelect();renderFotoMASelect();renderGalFilterSelect();buildUserList();}
+function saveAgPin(){
+  var p1=document.getElementById('newAgPin').value.trim();
+  var p2=document.getElementById('newAgPin2').value.trim();
+  if(!p1||p1.length===0){alert('Bitte neuen PIN eingeben.');return;}
+  if(p1.length!==4){alert('PIN muss genau 4 Ziffern haben. Eingabe hat '+p1.length+' Zeichen.');return;}
+  if(!/^[0-9]{4}$/.test(p1)){alert('PIN darf nur Ziffern 0-9 enthalten.');return;}
+  if(p1!==p2){alert('Die beiden PINs stimmen nicht überein.');return;}
+  if(employees.some(function(ma){return String(ma.pin)===p1;})){alert('Dieser PIN ist bereits einem Mitarbeiter zugewiesen.');return;}
+  APP_PIN=p1;
+  document.getElementById('currentPinDisplay').textContent=APP_PIN;
+  saveData();
+  document.getElementById('newAgPin').value='';
+  document.getElementById('newAgPin2').value='';
+  alert('Arbeitgeber-PIN erfolgreich geändert!\nNeuer PIN: '+p1+'\nBitte gut merken!');
+}
+function saveAgSettings(){alert('Einstellungen gespeichert.');}
+function deleteAllEntries(){if(confirm('Alle Einträge löschen?')){entries=[];saveData();renderRecent();renderMonth();alert('Gelöscht.');}}
+
+// ============ PROFIL ============
+function updateUrlaubKonto(){if(isAG())return;var maIdx=activeMaIdx();var ma=employees[maIdx];if(!ma)return;var gen=entries.filter(function(e){return e.ma===maIdx&&e.typ==='urlaub';}).length;var ubr=ma.urlaub-gen;document.getElementById('urlaubGen').textContent=gen;document.getElementById('urlaubUbr').textContent=ubr;document.getElementById('urlaubBar').style.width=Math.min(100,gen/ma.urlaub*100)+'%';document.getElementById('urlaubText').textContent=gen+' von '+ma.urlaub+' Tagen verbraucht';}
+function changeMaPin(){if(isAG())return;var p1=String(document.getElementById('newMaPin').value).trim();var p2=String(document.getElementById('newMaPin2').value).trim();if(!p1||p1.length!==4||isNaN(p1)){alert('Bitte gültigen 4-stelligen PIN eingeben.');return;}if(p1!==p2){alert('PINs stimmen nicht überein.');return;}if(p1===APP_PIN||employees.some(function(ma,i){return String(ma.pin)===p1&&i!==activeMaIdx();})){alert('Dieser PIN ist bereits vergeben.');return;}employees[activeMaIdx()].pin=p1;saveData();document.getElementById('newMaPin').value='';document.getElementById('newMaPin2').value='';alert('PIN erfolgreich geändert!');}
+
+// ============ BACKUP / IMPORT ============
+function exportBackup(){
+  var data={APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma};
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   var a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='arbeitszeit-backup-'+new Date().toISOString().split('T')[0]+'.json';
+  a.download='arbeitszeit-backup.json';
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-// ============ ARBEITSZEIT FUNKTIONEN ============
-function renderToday(){
-  var today=new Date().toISOString().split('T')[0];
-  var todayEntries=entries.filter(e=>e.datum===today);
-  var start=todayEntries.find(e=>e.start)?.start||'--:--';
-  var end=todayEntries[todayEntries.length-1]?.end||'--:--';
-  var hours=todayEntries.reduce((s,e)=>s+(e.h||0),0);
-  var pause=todayEntries.reduce((s,e)=>s+(e.pause||0),0);
-  
-  document.getElementById('todayStart').textContent=start;
-  document.getElementById('todayEnd').textContent=end;
-  document.getElementById('todayHours').textContent=hours.toFixed(2).replace('.',',');
-  document.getElementById('todayPause').textContent=pause;
-}
-
-function quickStart(){
-  var today=new Date().toISOString().split('T')[0];
-  var time=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
-  var entry={datum:today,start:time,end:'',pause:0,h:0,ort:'',notiz:'',ma:currentUser};
-  entries.push(entry);
-  saveData();
-  renderToday();
-}
-
-function quickStop(){
-  var today=new Date().toISOString().split('T')[0];
-  var time=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
-  var lastEntry=entries.filter(e=>e.datum===today).pop();
-  if(lastEntry){
-    lastEntry.end=time;
-    if(lastEntry.start){
-      var [sh,sm]=lastEntry.start.split(':');
-      var [eh,em]=time.split(':');
-      var startMin=parseInt(sh)*60+parseInt(sm);
-      var endMin=parseInt(eh)*60+parseInt(em);
-      lastEntry.h=Math.max(0,(endMin-startMin-lastEntry.pause)/60);
+function importBackup(event){
+  var file=event.target.files[0];
+  if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=JSON.parse(e.target.result);
+      APP_PIN=data.APP_PIN||APP_PIN;
+      employees=data.employees||[];
+      entries=data.entries||[];
+      fotos=data.fotos||[];
+      if(data.firma)firma=data.firma;
+      saveData();
+      alert('Backup erfolgreich importiert.');
+      location.reload();
+    }catch(err){
+      alert('Ungültige Backup-Datei');
     }
-    saveData();
-    renderToday();
+  };
+  reader.readAsText(file);
+}
+
+// ============ PDF / CSV EXPORT ============
+// Neue Funktion: Daten für beliebigen Monat abrufen
+function getMonthDataForRange(year,month,maIdx){
+  var prefix=year+'-'+pad(month+1);
+  var me=entries.filter(function(e){return e.dat&&e.dat.startsWith(prefix)&&(maIdx<0||e.ma===maIdx);});
+  return me;
+}
+
+function getMonthData(){
+  var prefix=currentYear+'-'+pad(currentMonth+1);
+  var fSel=document.getElementById('filterMA');
+  var filterIdx=(isAG()&&fSel)?parseInt(fSel.value):-1;
+  var maIdx=isAG()?filterIdx:activeMaIdx();
+  var me=entries.filter(function(e){return e.dat&&e.dat.startsWith(prefix)&&(maIdx<0||e.ma===maIdx);});
+  return {me:me,maIdx:maIdx};
+}
+function fmtDateDE(iso){
+  if(!iso||iso==='--')return iso||'';
+  var p=iso.split('-');
+  if(p.length<3)return iso;
+  var wd=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  var day=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])).getDay();
+  return wd[day]+' '+p[2]+'.'+p[1]+'.'+p[0];
+}
+function getMonthStats(){
+  var d=getMonthData();
+  var me=d.me, maIdx=d.maIdx;
+  var ma=maIdx>=0?employees[maIdx]:null;
+  var firmaN=(firma&&firma.name)?firma.name:(document.getElementById('agFirma')?document.getElementById('agFirma').value.trim():'');
+  var totalH=me.reduce(function(a,e){return a+e.h;},0);
+  var arbT=me.filter(function(e){return e.typ==='arbeit';}).length;
+  var soll=ma?ma.soll:7;
+  var ub=totalH-arbT*soll;
+  var krankT=me.filter(function(e){return e.typ==='krank';}).length;
+  var urlG=ma?entries.filter(function(e){return e.ma===maIdx&&e.typ==='urlaub';}).length:null;
+  return {me:me,maIdx:maIdx,ma:ma,firma:firmaN,totalH:totalH,ub:ub,krankT:krankT,urlG:urlG,allMA:(maIdx<0)};
+}
+
+// ============ EXPORT DIALOG ============
+var exportMode='pdf';
+function openExportModal(mode){
+  exportMode=mode||'pdf';
+  document.getElementById('exportModalWrap').classList.add('open');
+  document.getElementById('exportPreset').value='';
+  document.getElementById('exportCustom').style.display='none';
+  // Setze heute als Standard-Enddatum
+  var today=new Date();
+  var from=new Date(today.getFullYear(),today.getMonth(),1);
+  document.getElementById('exportFromDate').value=from.toISOString().split('T')[0];
+  document.getElementById('exportToDate').value=today.toISOString().split('T')[0];
+  var btn=document.getElementById('exportBtn');
+  if(btn)btn.textContent=(mode==='csv'?'📊 Exportieren':'📄 Exportieren');
+}
+function closeExportModal(){
+  document.getElementById('exportModalWrap').classList.remove('open');
+}
+function updateExportPreset(){
+  var preset=document.getElementById('exportPreset').value;
+  var customDiv=document.getElementById('exportCustom');
+  if(preset==='custom'){
+    customDiv.style.display='block';
+  }else{
+    customDiv.style.display='none';
+    var today=new Date();
+    var from,to=today.toISOString().split('T')[0];
+    if(preset==='all'){
+      // Finde frühestes Eintragsdatum
+      if(entries.length){
+        var dates=entries.map(function(e){return e.dat;}).filter(Boolean).sort();
+        if(dates.length)from=dates[0];
+        else from=new Date(2020,0,1).toISOString().split('T')[0];
+      }else{
+        from=new Date(2020,0,1).toISOString().split('T')[0];
+      }
+    }else if(preset==='last3'){
+      from=new Date(today.getFullYear(),today.getMonth()-2,1).toISOString().split('T')[0];
+    }else if(preset==='last6'){
+      from=new Date(today.getFullYear(),today.getMonth()-5,1).toISOString().split('T')[0];
+    }else{
+      // Aktueller Monat
+      from=new Date(today.getFullYear(),today.getMonth(),1).toISOString().split('T')[0];
+    }
+    document.getElementById('exportFromDate').value=from;
+    document.getElementById('exportToDate').value=to;
+  }
+}
+function executeExport(){
+  var fromDate=document.getElementById('exportFromDate').value;
+  var toDate=document.getElementById('exportToDate').value;
+  if(!fromDate||!toDate){
+    alert('Bitte Datum-Bereich wählen');
+    return;
+  }
+  if(exportMode==='csv'){
+    exportCSVRange(fromDate,toDate);
+  }else{
+    exportPDFRange(fromDate,toDate);
+  }
+  closeExportModal();
+}
+
+// ============ BEREICHS-EXPORT (neu) ============
+function getDataInRange(fromDate,toDate,maIdx){
+  return entries.filter(function(e){
+    if(!e.dat)return false;
+    if(maIdx>=0&&e.ma!==maIdx)return false;
+    return e.dat>=fromDate&&e.dat<=toDate;
+  });
+}
+
+function exportPDFRange(fromDate,toDate){
+  var hasLib = window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && typeof window.jspdf.jsPDF.API.autoTable==='function';
+  if(!hasLib){
+    alert('jsPDF Bibliothek nicht verfügbar. Bitte den Browser neu laden.');
+    return;
+  }
+  try{
+    var fSel=document.getElementById('filterMA');
+    var filterIdx=(isAG()&&fSel)?parseInt(fSel.value):-1;
+    var maIdx=isAG()?filterIdx:activeMaIdx();
+    var ma=maIdx>=0?employees[maIdx]:null;
+    var rangeData=getDataInRange(fromDate,toDate,maIdx);
+    var firmaN=(firma&&firma.name)?firma.name:(document.getElementById('agFirma')?document.getElementById('agFirma').value.trim():'');
+    var totalH=rangeData.reduce(function(a,e){return a+e.h;},0);
+    var arbT=rangeData.filter(function(e){return e.typ==='arbeit';}).length;
+    var soll=ma?ma.soll:7;
+    var ub=totalH-(arbT*soll);
+    
+    var jsPDF=window.jspdf.jsPDF;
+    var doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+    var M=14,PW=210,y=18;
+    
+    // Firma + Mitarbeiter Header
+    doc.setFontSize(18);doc.setTextColor(17,17,17);doc.setFont('helvetica','bold');
+    doc.text('Arbeitszeitbericht',M,y); y+=8;
+    doc.setFontSize(10);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
+    doc.text('Zeitraum: '+fromDate+' bis '+toDate,M,y); y+=4;
+    if(ma)doc.text('Mitarbeiter: '+ma.vn+' '+ma.nl,M,y); y+=4;
+    if(firmaN)doc.text('Firma: '+firmaN,M,y); y+=8;
+    
+    // Zusammenfassung
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(17,17,17);
+    doc.text('Zusammenfassung',M,y); y+=5;
+    var summaryData=[
+      ['Gesamtstunden',totalH.toFixed(2)],
+      ['Arbeitstage',arbT],
+      ['Sollstunden',arbT*soll],
+      ['Überstunden',(ub>=0?'+':'')+ub.toFixed(2)]
+    ];
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(60,60,60);
+    summaryData.forEach(function(row){
+      doc.text(row[0]+': '+row[1],M,y); y+=4;
+    });
+    y+=4;
+    
+    // Einträge-Tabelle
+    var tableData=[['Datum','Typ','Stunden','Ort']];
+    rangeData.sort(function(a,b){return (a.dat||'').localeCompare(b.dat||'');}).forEach(function(e){
+      tableData.push([
+        fmtDateDE(e.dat),
+        eLabels[e.typ]||e.typ,
+        (e.h||'').toString(),
+        e.ort||'—'
+      ]);
+    });
+    
+    if(doc.autoTable){
+      doc.autoTable({
+        startY:y,
+        head:[tableData[0]],
+        body:tableData.slice(1),
+        margin:{left:M,right:M},
+        styles:{fontSize:9,cellPadding:3,halign:'left'},
+        headStyles:{fillColor:[17,17,17],textColor:[255,255,255],fontStyle:'bold'}
+      });
+    }
+    
+    var fname='Arbeitsbericht_'+fromDate+'_'+toDate+(ma?'_'+ma.vn+'_'+ma.nl:'')+'.pdf';
+    doc.save(fname);
+    alert('✅ PDF exportiert: '+fname);
+  }catch(err){
+    console.error('PDF-Export Fehler:',err);
+    alert('PDF-Export fehlgeschlagen: '+err.message);
   }
 }
 
-function saveEntry(){
-  var entry={
-    datum:document.getElementById('entryDate').value,
-    ort:document.getElementById('entryOrt').value,
-    start:document.getElementById('entryStart').value,
-    end:document.getElementById('entryEnd').value,
-    pause:parseInt(document.getElementById('entryPause').value)||0,
-    notiz:document.getElementById('entryNotiz').value,
-    ma:currentUser,
-    h:0
+function exportCSVRange(fromDate,toDate){
+  var fSel=document.getElementById('filterMA');
+  var filterIdx=(isAG()&&fSel)?parseInt(fSel.value):-1;
+  var maIdx=isAG()?filterIdx:activeMaIdx();
+  var ma=maIdx>=0?employees[maIdx]:null;
+  var rangeData=getDataInRange(fromDate,toDate,maIdx);
+  
+  var rows=[
+    ['Arbeitszeiten-Auszug'],
+    ['Zeitraum: '+fromDate+' bis '+toDate],
+    [ma?'Mitarbeiter: '+ma.vn+' '+ma.nl:'Alle Mitarbeiter'],
+    []
+  ];
+  
+  // Tabellenkopf
+  rows.push(['Datum','Wochentag','Typ','Stunden','Ort','Notiz']);
+  
+  // Daten sortiert
+  rangeData.sort(function(a,b){return (a.dat||'').localeCompare(b.dat||'');}).forEach(function(e){
+    var d=new Date(e.dat);
+    var wd=['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
+    rows.push([
+      e.dat,
+      wd,
+      eLabels[e.typ]||e.typ,
+      e.h||'',
+      e.ort||'',
+      e.notiz||''
+    ]);
+  });
+  
+  // Zusammenfassung
+  rows.push([]);
+  var totalH=rangeData.reduce(function(a,e){return a+e.h;},0);
+  var arbT=rangeData.filter(function(e){return e.typ==='arbeit';}).length;
+  var soll=ma?ma.soll:7;
+  rows.push(['Zusammenfassung:']);
+  rows.push(['Gesamtstunden',totalH.toFixed(2)]);
+  rows.push(['Arbeitstage',arbT]);
+  rows.push(['Sollstunden',arbT*soll]);
+  rows.push(['Überstunden',(totalH-(arbT*soll)).toFixed(2)]);
+  
+  // CSV konvertieren
+  var csv=rows.map(function(row){
+    return row.map(function(cell){
+      if(!cell)return '';
+      var s=String(cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1||s.indexOf('\n')>-1){
+        return '"'+s.replace(/"/g,'""')+'"';
+      }
+      return s;
+    }).join(',');
+  }).join('\n');
+  
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var link=document.createElement('a');
+  link.setAttribute('href',URL.createObjectURL(blob));
+  link.setAttribute('download','Arbeitsbericht_'+fromDate+'_'+toDate+(ma?'_'+ma.vn:'')+'.csv');
+  link.click();
+  alert('✅ CSV exportiert');
+}
+
+// ============ DEBUG & RECOVERY PANEL ============
+function refreshDebugPanel(){
+  // Gesamte Einträge
+  document.getElementById('debugTotalEntries').textContent = entries.length;
+  
+  // Firebase Status
+  var fbStatus = firebaseReady 
+    ? '✅ Verbunden' + (cloudSynced ? ' (synchronisiert)' : ' (synchronisiert wird...)')
+    : '❌ Nicht verbunden';
+  document.getElementById('debugFirebaseStatus').textContent = fbStatus;
+  
+  // Cloud-Sync Status
+  var cloudStatus = cloudSynced 
+    ? '✅ Lokale Daten sind aktuell'
+    : '⏳ Wird synchronisiert...';
+  document.getElementById('debugCloudSync').textContent = cloudStatus;
+  
+  // Verfügbare Monate auflisten
+  var monthMap = {};
+  entries.forEach(function(e){
+    if(e.dat){
+      var m = e.dat.substring(0,7); // YYYY-MM format
+      monthMap[m] = (monthMap[m] || 0) + 1;
+    }
+  });
+  
+  var sortedMonths = Object.keys(monthMap).sort().reverse();
+  var monthsHTML = sortedMonths.length > 0 
+    ? sortedMonths.map(function(m){
+        var count = monthMap[m];
+        var parts = m.split('-');
+        var monthName = monthNames[parseInt(parts[1])-1] + ' ' + parts[0];
+        return '<div style="padding:4px 0;border-bottom:1px solid #e5e5e5">' + 
+               monthName + ': <strong>' + count + ' Einträge</strong></div>';
+      }).join('')
+    : '<div style="color:#999">Keine Einträge vorhanden</div>';
+  
+  document.getElementById('debugAvailableMonths').innerHTML = 
+    '<strong>Verfügbare Monate (nach Datum sortiert):</strong><br>' + monthsHTML;
+}
+
+function forceCloudSync(){
+  if(!firebaseReady){
+    alert('Firebase nicht verbunden. Bitte Internet prüfen.');
+    return;
+  }
+  alert('🔄 Force-Sync wird gestartet...');
+  cloudSynced = true; // Erlaube Schreiben
+  saveLock = Date.now() + 500; // Kurze Sperre
+  pushToCloud();
+  setTimeout(function(){
+    alert('✅ Cloud-Synchronisierung abgeschlossen!');
+    refreshDebugPanel();
+  }, 1000);
+}
+
+function downloadFullBackup(){
+  if(entries.length === 0){
+    alert('Keine Einträge zum Backup vorhanden.');
+    return;
+  }
+  
+  // Erstelle Backup mit ALLEN Daten
+  var backup = {
+    timestamp: new Date().toISOString(),
+    APP_PIN: APP_PIN,
+    employees: employees,
+    entries: entries,
+    fotos: fotos,
+    firma: firma,
+    baustellen: baustellen,
+    timers: timers,
+    protokolle: protokolle || [],
+    totalEntries: entries.length,
+    monthRange: {
+      earliest: entries.map(e => e.dat).filter(Boolean).sort()[0],
+      latest: entries.map(e => e.dat).filter(Boolean).sort().reverse()[0]
+    }
   };
   
-  if(entry.start && entry.end){
-    var [sh,sm]=entry.start.split(':');
-    var [eh,em]=entry.end.split(':');
-    var startMin=parseInt(sh)*60+parseInt(sm);
-    var endMin=parseInt(eh)*60+parseInt(em);
-    entry.h=Math.max(0,(endMin-startMin-entry.pause)/60);
-  }
+  var blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'arbeitszeit-vollbackup_' + new Date().toISOString().split('T')[0] + '.json';
+  link.click();
   
-  entries.push(entry);
-  saveData();
-  alert('✓ Eintrag gespeichert!');
-  document.getElementById('entryDate').value=new Date().toISOString().split('T')[0];
-  document.getElementById('entryOrt').value='';
-  document.getElementById('entryStart').value='';
-  document.getElementById('entryEnd').value='';
-  document.getElementById('entryPause').value='0';
-  document.getElementById('entryNotiz').value='';
+  alert('✅ Vollständiges Backup heruntergeladen!\nEinträge: ' + entries.length);
 }
 
-function renderMonth(){
-  var monthData=entries.filter(e=>{
-    if(!e.datum)return false;
-    var d=new Date(e.datum);
-    return d.getMonth()===currentMonth && d.getFullYear()===currentYear;
+function listAllDataByMonth(){
+  var monthMap = {};
+  entries.forEach(function(e){
+    if(e.dat){
+      var m = e.dat.substring(0,7);
+      if(!monthMap[m]) monthMap[m] = [];
+      monthMap[m].push(e);
+    }
   });
   
-  var totalHours=0,html='';
-  monthData.forEach(e=>{
-    totalHours+=e.h||0;
-    var emp=employees.find(x=>x.id===e.ma)?employees.find(x=>x.id===e.ma).vn+' '+employees.find(x=>x.id===e.ma).nl:'';
-    html+='<div class="ent">'+
-          '<div class="einfo">'+
-          '<div class="etitle">'+e.datum+'</div>'+
-          '<div class="esub">'+e.ort+' · '+e.start+'-'+e.end+'</div>'+
-          '</div>'+
-          '<div class="mv b">'+e.h.toFixed(2).replace('.',',')+'h</div>'+
-          '</div>';
+  console.log('=== ALLE DATEN NACH MONAT ===');
+  Object.keys(monthMap).sort().reverse().forEach(function(month){
+    console.log(month + ': ' + monthMap[month].length + ' Einträge');
+    monthMap[month].forEach(function(e){
+      console.log('  - ' + e.dat + ': ' + e.h + 'h (' + eLabels[e.typ] + ')');
+    });
   });
-  
-  document.getElementById('monthData').innerHTML='<div class="card">'+
-    '<div class="m2">'+
-    '<div class="met"><div class="ml">Gesamtstunden</div><div class="mv g">'+totalHours.toFixed(2).replace('.',',')+'</div></div>'+
-    '<div class="met"><div class="ml">Einträge</div><div class="mv b">'+monthData.length+'</div></div>'+
-    '</div>'+
-    html+
-    '</div>';
-  
-  document.getElementById('monthSelect').value=currentMonth;
-  document.getElementById('yearSelect').value=currentYear;
 }
 
-function prevMonth(){
-  currentMonth--;
-  if(currentMonth<0){currentMonth=11;currentYear--;}
-  renderMonth();
-}
-
-function nextMonth(){
-  currentMonth++;
-  if(currentMonth>11){currentMonth=0;currentYear++;}
-  renderMonth();
-}
-
-function changeMonth(){
-  currentMonth=parseInt(document.getElementById('monthSelect').value);
-  currentYear=parseInt(document.getElementById('yearSelect').value);
-  renderMonth();
+// Automatisch beim Laden ausführen
+function initDebugPanel(){
+  setTimeout(function(){
+    refreshDebugPanel();
+    // Auch in Console ausgeben
+    console.log('🔍 Debug-Panel aktualisiert');
+    console.log('📊 Einträge gesamt: ' + entries.length);
+    if(entries.length > 0){
+      console.log('📅 Zeitraum: ' + entries.map(e => e.dat).filter(Boolean).sort()[0] + 
+                  ' bis ' + entries.map(e => e.dat).filter(Boolean).sort().reverse()[0]);
+    }
+  }, 500);
 }
 
 function exportPDF(){
-  var doc=new jsPDF();
-  doc.text('Arbeitszeit '+monthNames[currentMonth]+' '+currentYear,14,15);
-  var data=[['Datum','Start','Ende','Stunden','Ort']];
-  entries.filter(e=>{
-    if(!e.datum)return false;
-    var d=new Date(e.datum);
-    return d.getMonth()===currentMonth && d.getFullYear()===currentYear;
-  }).forEach(e=>{
-    data.push([e.datum,e.start||'',e.end||'',(e.h||0).toFixed(2).replace('.',','),e.ort||'']);
-  });
-  doc.autoTable({head:[data[0]],body:data.slice(1),startY:25});
-  doc.save('arbeitszeit-'+monthNames[currentMonth]+'-'+currentYear+'.pdf');
+  var hasLib = window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && typeof window.jspdf.jsPDF.API.autoTable==='function';
+  if(!hasLib){ return exportPDFprint(); }
+  try{
+    var s=getMonthStats();
+    var jsPDF=window.jspdf.jsPDF;
+    var doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+    var M=14;var PW=210;var y=18;
+    doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(17,17,17);
+    doc.text('Arbeitszeitbericht',M,y);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(130,130,130);
+    doc.text('Erstellt am '+new Date().toLocaleDateString('de-DE'),PW-M,y,{align:'right'});
+    y+=7;
+    var sub=[];if(s.firma)sub.push(s.firma);if(s.ma)sub.push(s.ma.vn+' '+s.ma.nl+(s.ma.rolle?' ('+s.ma.rolle+')':''));
+    if(sub.length){doc.setFontSize(11);doc.setTextColor(80,80,80);doc.text(sub.join('   |   '),M,y);y+=6;}
+    doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(17,17,17);
+    doc.text(monthNames[currentMonth]+' '+currentYear,M,y);y+=7;
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(60,60,60);
+    var summ='Gesamt: '+s.totalH.toFixed(2).replace('.',',')+' h     Überstunden: '+(s.ub>=0?'+':'')+s.ub.toFixed(2).replace('.',',')+' h     Kranktage: '+s.krankT;
+    if(s.ma&&s.urlG!==null)summ+='     Urlaub übrig: '+(s.ma.urlaub-s.urlG)+'/'+s.ma.urlaub;
+    doc.text(summ,M,y);y+=4;
+    var head=s.allMA?[['Datum','Typ','Mitarbeiter','Start','Ende','Pause','Netto','Ort / Notiz']]
+                    :[['Datum','Typ','Start','Ende','Pause','Netto','Ort / Notiz']];
+    var body=s.me.map(function(e){
+      var datum=fmtDateDE(e.dat);
+      var typ=eLabels[e.typ]||e.typ;
+      var start=(e.start&&e.start!=='--')?e.start:'-';
+      var ende=(e.end&&e.end!=='--')?e.end:'-';
+      var pause=e.pause?e.pause+' min':'-';
+      var netto=e.h?e.h.toFixed(2).replace('.',',')+' h':'-';
+      var on=(e.ort||'')+((e.ort&&e.notiz)?' - ':'')+(e.notiz||'');
+      if(s.allMA){var mn=employees[e.ma]?employees[e.ma].vn+' '+employees[e.ma].nl:'';return [datum,typ,mn,start,ende,pause,netto,on];}
+      return [datum,typ,start,ende,pause,netto,on];
+    });
+    if(body.length===0){body=[[{content:'Keine Einträge in diesem Monat.',colSpan:(s.allMA?8:7),styles:{halign:'center',textColor:[136,136,136],fontStyle:'italic'}}]];}
+    var colS=s.allMA?{3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'right',fontStyle:'bold'}}
+                    :{2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'right',fontStyle:'bold'}};
+    doc.autoTable({
+      startY:y+2,head:head,body:body,theme:'grid',
+      styles:{font:'helvetica',fontSize:8.5,cellPadding:1.8,textColor:[40,40,40],lineColor:[225,225,225],lineWidth:0.1,overflow:'linebreak'},
+      headStyles:{fillColor:[31,41,55],textColor:[255,255,255],fontStyle:'bold',fontSize:8.5},
+      alternateRowStyles:{fillColor:[248,248,248]},
+      columnStyles:colS,margin:{left:M,right:M}
+    });
+    var fy=(doc.lastAutoTable&&doc.lastAutoTable.finalY)?doc.lastAutoTable.finalY:y+10;
+    var sy=fy+24;
+    if(sy>278){doc.addPage();sy=40;}
+    doc.setDrawColor(140,140,140);doc.setLineWidth(0.2);
+    doc.line(M,sy,M+72,sy);doc.line(PW-M-72,sy,PW-M,sy);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(110,110,110);
+    doc.text('Datum & Unterschrift Mitarbeiter',M,sy+4);
+    doc.text('Datum & Unterschrift Arbeitgeber',PW-M-72,sy+4);
+    var fname='Arbeitszeit_'+monthNames[currentMonth]+'_'+currentYear+(s.ma?'_'+s.ma.nl:'')+'.pdf';
+    doc.save(fname);
+  }catch(err){
+    exportPDFprint();
+  }
 }
-
+function exportPDFprint(){
+  var s=getMonthStats();
+  var rows=s.me.map(function(e){
+    var mName=employees[e.ma]?employees[e.ma].vn+' '+employees[e.ma].nl:'';
+    return '<tr>'
+      +'<td>'+fmtDateDE(e.dat)+'</td>'
+      +'<td>'+eLabels[e.typ]+'</td>'
+      +(s.allMA?'<td>'+mName+'</td>':'')
+      +'<td style="text-align:center">'+(e.start&&e.start!=='--'?e.start:'-')+'</td>'
+      +'<td style="text-align:center">'+(e.end&&e.end!=='--'?e.end:'-')+'</td>'
+      +'<td style="text-align:center">'+(e.pause?e.pause+' min':'-')+'</td>'
+      +'<td style="text-align:right;font-weight:600">'+(e.h?e.h.toFixed(2).replace('.',',')+' h':'-')+'</td>'
+      +'<td>'+(e.ort||'')+((e.ort&&e.notiz)?' - ':'')+(e.notiz||'')+'</td>'
+      +'</tr>';
+  }).join('');
+  var html='<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Arbeitszeitbericht</title><style>'
+    +'*{box-sizing:border-box;margin:0;padding:0;}'
+    +'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#111;padding:14mm;}'
+    +'h1{font-size:20px;margin-bottom:2px;}.meta{font-size:12px;color:#555;}'
+    +'.period{font-size:15px;font-weight:600;margin:6px 0 14px;}'
+    +'.summary{font-size:11px;color:#444;margin-bottom:14px;}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:26px;}'
+    +'th{background:#1f2937;color:#fff;padding:6px 7px;text-align:left;font-size:10px;}'
+    +'td{padding:5px 7px;border-bottom:1px solid #eee;font-size:10px;}'
+    +'tr:nth-child(even) td{background:#f8f8f8;}'
+    +'.footer{display:flex;justify-content:space-between;margin-top:28px;}'
+    +'.sig{border-top:1px solid #888;width:200px;padding-top:4px;font-size:10px;color:#666;}'
+    +'@media print{@page{margin:10mm}body{padding:0}}'
+    +'</style></head><body>'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+    +'<div><h1>Arbeitszeitbericht</h1>'
+    +(s.firma?'<div class="meta">'+s.firma+'</div>':'')
+    +(s.ma?'<div class="meta">'+s.ma.vn+' '+s.ma.nl+(s.ma.rolle?' · '+s.ma.rolle:'')+'</div>':'')
+    +'</div><div style="font-size:10px;color:#888">Erstellt am '+new Date().toLocaleDateString('de-DE')+'</div></div>'
+    +'<div class="period">'+monthNames[currentMonth]+' '+currentYear+'</div>'
+    +'<div class="summary"><b>Gesamt:</b> '+s.totalH.toFixed(2).replace('.',',')+' h &nbsp;&nbsp; <b>Überstunden:</b> '+(s.ub>=0?'+':'')+s.ub.toFixed(2).replace('.',',')+' h &nbsp;&nbsp; <b>Kranktage:</b> '+s.krankT+(s.ma&&s.urlG!==null?' &nbsp;&nbsp; <b>Urlaub übrig:</b> '+(s.ma.urlaub-s.urlG)+'/'+s.ma.urlaub:'')+'</div>'
+    +'<table><thead><tr><th>Datum</th><th>Typ</th>'+(s.allMA?'<th>Mitarbeiter</th>':'')
+    +'<th style="text-align:center">Start</th><th style="text-align:center">Ende</th><th style="text-align:center">Pause</th><th style="text-align:right">Netto</th><th>Ort / Notiz</th></tr></thead><tbody>'
+    +(rows||'<tr><td colspan="'+(s.allMA?8:7)+'" style="text-align:center;padding:18px;color:#888">Keine Einträge in diesem Monat.</td></tr>')
+    +'</tbody></table>'
+    +'<div class="footer"><div class="sig">Datum &amp; Unterschrift Mitarbeiter</div><div class="sig">Datum &amp; Unterschrift Arbeitgeber</div></div>'
+    +'</body></html>';
+  var iframe=document.createElement('iframe');
+  iframe.style.position='fixed';iframe.style.right='0';iframe.style.bottom='0';
+  iframe.style.width='0';iframe.style.height='0';iframe.style.border='0';
+  document.body.appendChild(iframe);
+  var idoc=iframe.contentWindow.document;
+  idoc.open();idoc.write(html);idoc.close();
+  setTimeout(function(){
+    try{iframe.contentWindow.focus();iframe.contentWindow.print();}catch(e){}
+    setTimeout(function(){if(iframe.parentNode)iframe.parentNode.removeChild(iframe);},1500);
+  },350);
+}
 function exportCSV(){
-  var header=['Datum','Start','Ende','Pause','Stunden','Ort','Notiz'];
-  var rows=entries.filter(e=>{
-    if(!e.datum)return false;
-    var d=new Date(e.datum);
-    return d.getMonth()===currentMonth && d.getFullYear()===currentYear;
-  }).map(e=>[e.datum,e.start||'',e.end||'',e.pause||0,(e.h||0).toFixed(2).replace('.',','),e.ort||'',e.notiz||'']);
-  
-  var csv='\uFEFF'+[header].concat(rows).map(r=>r.map(c=>{
-    var s=String(c);
-    return(s.includes(';')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;
-  }).join(';')).join('\r\n');
-  
+  var d=getMonthData();
+  var me=d.me, maIdx=d.maIdx;
+  var allMA=maIdx<0;
+  var wd=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  var header=['Datum','Wochentag','Typ'];
+  if(allMA)header.push('Mitarbeiter');
+  header=header.concat(['Start','Ende','Pause (min)','Netto (h)','Ort','Notiz']);
+  var rows=me.map(function(e){
+    var p=e.dat?e.dat.split('-'):['','',''];
+    var wday=e.dat?wd[new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])).getDay()]:'';
+    var row=[p.length===3?p[2]+'.'+p[1]+'.'+p[0]:'',wday,eLabels[e.typ]||e.typ];
+    if(allMA)row.push(employees[e.ma]?employees[e.ma].vn+' '+employees[e.ma].nl:'');
+    row=row.concat([
+      (e.start&&e.start!=='--'?e.start:''),
+      (e.end&&e.end!=='--'?e.end:''),
+      e.pause||0,
+      (e.h?e.h.toFixed(2).replace('.',','):'0,00'),
+      e.ort||'',
+      e.notiz||''
+    ]);
+    return row;
+  });
+  function csvEsc(c){var s=String(c);return(s.includes(';')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;}
+  var csv='\uFEFF'+[header].concat(rows).map(function(r){return r.map(csvEsc).join(';');}).join('\r\n');
   var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   var a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -757,19 +1376,17 @@ function exportCSV(){
   URL.revokeObjectURL(a.href);
 }
 
-// ============ PERSISTENZ ============
-function saveData(){
-  saveLocal();
-  saveLock=Date.now()+30000;
-  pushToCloud();
+// ============ PERSISTENZ (localStorage + Firebase) ============
+function storageWorks(){
+  try{var t='__test__';localStorage.setItem(t,'1');localStorage.removeItem(t);return true;}
+  catch(err){return false;}
 }
-
+// Lokaler Cache: damit die App sofort startet, auch ohne Netz
 function saveLocal(){
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN,employees,entries,pruefprotokolle,fotos,firma,savedAt:new Date().toISOString()}));
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,savedAt:new Date().toISOString()}));
   }catch(err){}
 }
-
 function loadLocal(){
   try{
     var raw=localStorage.getItem(STORAGE_KEY);
@@ -778,92 +1395,111 @@ function loadLocal(){
     if(data.APP_PIN)APP_PIN=data.APP_PIN;
     if(Array.isArray(data.employees))employees=data.employees;
     if(Array.isArray(data.entries))entries=data.entries;
-    if(Array.isArray(data.pruefprotokolle))pruefprotokolle=data.pruefprotokolle;
     if(Array.isArray(data.fotos))fotos=data.fotos;
     if(data.firma)firma=data.firma;
   }catch(err){}
 }
-
+// Zentrales Speichern: lokal + Cloud
+// Zentrales Speichern: lokal + Cloud
+function saveData(){
+  saveLocal();
+  saveLock=Date.now()+30000; // 30 Sek. lang keine Cloud-Snapshots uebernehmen
+  pushToCloud();
+}
 function pushToCloud(){
   if(firebaseReady && docRef && !applyingSnapshot){
-    docRef.set({APP_PIN,employees,entries,pruefprotokolle,fotos,firma,savedAt:new Date().toISOString()})
-      .catch(e=>console.warn('Cloud-Speichern fehlgeschlagen:',e));
+    docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,savedAt:new Date().toISOString()})
+      .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);});
   }
 }
 
+// Aktualisiert alle sichtbaren Listen, wenn neue Cloud-Daten ankommen
+function refreshAll(){
+  buildUserList();
+  if(currentUser){
+    // Firmenfelder aktualisieren (nur wenn nicht gerade getippt wird)
+    var af=document.getElementById('agFirma');
+    if(af && document.activeElement!==af){af.value=firma.name||'';}
+    var as=document.getElementById('agStr');
+    if(as && document.activeElement!==as){as.value=firma.str||'';}
+    var ap=document.getElementById('agPlz');
+    if(ap && document.activeElement!==ap){ap.value=firma.plz||'';}
+    var cp=document.getElementById('currentPinDisplay');if(cp)cp.textContent=APP_PIN;
+    renderRecent();renderMonth();renderGalerie();
+    if(isAG()){renderMAListe();renderAgFilterSelect();}
+    else{updateUrlaubKonto();}
+  }
+}
+
+function isFirebaseConfigured(){
+  return FIREBASE_CONFIG && FIREBASE_CONFIG.projectId &&
+         FIREBASE_CONFIG.projectId.indexOf('HIER_')!==0 &&
+         FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('HIER_')!==0;
+}
+
 function initFirebase(){
-  if(!FIREBASE_CONFIG.projectId || FIREBASE_CONFIG.projectId.indexOf('HIER_')===0)return;
+  if(!isFirebaseConfigured()){ updateVerInfo(); return; }
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
     var db=firebase.firestore();
+    // Kein enablePersistence: verhindert Revert-Snapshots nach fehlgeschlagenen Schreibvorgaengen
     docRef=db.collection('arbeitszeit').doc(COMPANY_ID);
     firebaseReady=true;
     updateVerInfo();
-    docRef.onSnapshot(snap=>{
-      if(Date.now()<saveLock)return;
+    docRef.onSnapshot(function(snap){
+      // Nach einem lokalen Speichern 30 Sek. lang keine Cloud-Daten uebernehmen.
+      // Verhindert, dass Firestore-Revert-Snapshots den gerade geaenderten PIN zuruecksetzen.
+      if(Date.now()<saveLock){ return; }
       if(snap.exists){
         var d=snap.data();
         applyingSnapshot=true;
         if(d.APP_PIN)APP_PIN=d.APP_PIN;
         if(Array.isArray(d.employees))employees=d.employees;
         if(Array.isArray(d.entries))entries=d.entries;
-        if(Array.isArray(d.pruefprotokolle))pruefprotokolle=d.pruefprotokolle;
         if(Array.isArray(d.fotos))fotos=d.fotos;
         if(d.firma)firma=d.firma;
         applyingSnapshot=false;
         saveLocal();
-      }else{
+        refreshAll();
+      } else {
+        // Dokument existiert noch nicht: aktuellen lokalen Stand hochladen
         pushToCloud();
       }
+    }, function(err){
+      console.warn('Firestore-Verbindung:',err);
+      firebaseReady=false;updateVerInfo();
     });
   }catch(e){
     console.warn('Firebase-Init fehlgeschlagen:',e);
-    firebaseReady=false;
+    firebaseReady=false;updateVerInfo();
   }
 }
 
 function updateVerInfo(){
-  var vi=document.getElementById('verInfo');
-  if(!vi)return;
-  if(firebaseReady){
-    vi.innerHTML='Version 7 · ☁ Cloud-Sync aktiv · Prüfprotokolle';
-  }else{
-    vi.innerHTML='Version 7 · ⏳ Nur lokal (Cloud wird verbunden...)';
+  var vi=document.getElementById('verInfo');if(!vi)return;
+  if(!isFirebaseConfigured()){
+    vi.innerHTML='Version 4 · ⚠ Nur lokal (Firebase nicht eingerichtet)';
+  } else if(firebaseReady){
+    vi.innerHTML='Version 4 · ☁ Cloud-Sync aktiv';
+  } else {
+    vi.innerHTML='Version 4 · ⏳ Verbinde mit Cloud...';
   }
 }
 
-function buildUserList(){
-  if(employees.length===0){
-    employees=[
-      {id:'ma1',vn:'Max',nl:'Mustermann',pin:'1111',rolle:'mitarbeiter'},
-      {id:'ma2',vn:'Anna',nl:'Schmidt',pin:'2222',rolle:'mitarbeiter'}
-    ];
-  }
-  var html='';
-  employees.forEach(e=>{
-    html+='<div class="user-item" onclick="loginUser(\''+e.id+'\')">'+
-          '<div class="avt" style="background:#dbeafe;color:#1e40af">'+e.vn[0]+'</div>'+
-          '<div>'+e.vn+' '+e.nl+'</div>'+
-          '</div>';
-  });
-  document.getElementById('userList').innerHTML=html;
+// ============ START ============
+loadLocal();          // 1. Sofort aus lokalem Cache laden (schneller Start)
+initFirebase();       // 2. Mit Cloud verbinden -> Echtzeit-Sync uebernimmt
+if(!storageWorks()){
+  var sw=document.getElementById('storageWarn');
+  if(sw){sw.style.display='block';sw.textContent='⚠️ Dieser Browser speichert keine Daten dauerhaft (evtl. privater Modus). Cloud-Sync funktioniert trotzdem, solange Internet vorhanden ist.';}
 }
+updateVerInfo();
+buildUserList();
 
-function logout(){
-  currentUser=null;
-  isAdminMode=false;
-  document.getElementById('loginScreen').style.display='flex';
-  document.getElementById('mainApp').style.display='none';
-  document.getElementById('userStep').style.display='block';
-  document.getElementById('pinStep').style.display='none';
-}
-
-// ============ STUB FUNKTIONEN ============
-function saveFirma(){alert('✓ Firmendaten gespeichert!');saveData();}
-function showAddMA(){alert('Neue Mitarbeiter können Sie noch nicht über diese App hinzufügen.');}
-
+// Beim Verlassen/Verstecken der Seite noch schnell sichern (auch mobil)
 window.addEventListener('pagehide',saveData);
-document.addEventListener('visibilitychange',()=>{if(document.hidden)saveData();});
+document.addEventListener('visibilitychange',function(){if(document.hidden)saveData();});
+
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
