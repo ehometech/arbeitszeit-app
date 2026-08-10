@@ -152,7 +152,7 @@ textarea{resize:vertical;min-height:52px}
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 13 · Fix: Timer-Reset nach Stopp, Protokoll-Entwurf beim Abmelden, Ω/Δ im PDF-Export</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 14 · Live Cloud-Status-Anzeige (Heute-Tab, oben)</div>
 </div>
 
 <!-- MAIN APP -->
@@ -171,6 +171,9 @@ textarea{resize:vertical;min-height:52px}
   <div class="tab active" id="tab-heute">
     <div id="syncStatusBanner" style="display:none" class="offline-badge" style="width:100%;justify-content:center;margin:-12px -12px 12px -12px;border-radius:0">
       📡 Offline-Modus aktiv
+    </div>
+    <div id="cloudStatusBar" onclick="showCloudDetail()" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:11px;color:#888;background:#f5f5f5;padding:6px 10px;border-radius:8px;margin-bottom:10px">
+      <span id="cloudDot">⚪</span><span id="cloudStatusText">Cloud-Status wird geprüft…</span>
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1017,6 +1020,7 @@ function initApp(){
   document.getElementById('agPlz').value=firma.plz||'';
   document.getElementById('currentPinDisplay').textContent=APP_PIN;
   updateSyncStatus();
+  updateCloudBadge();
   if(isAG()){
     document.querySelectorAll('.agOnly').forEach(function(el){el.style.display='';});
     document.getElementById('maSelectRow').style.display='block';
@@ -1671,13 +1675,14 @@ function saveData(){
 function pushToCloud(){
   if(firebaseReady && cloudSynced && docRef && !applyingSnapshot){
     return docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()})
-      .then(function(){return true;})
-      .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);throw e;});
+      .then(function(){lastCloudSyncAt=new Date();updateCloudBadge();return true;})
+      .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);updateCloudBadge();throw e;});
   }
   return Promise.resolve(false);
 }
 function refreshAll(){
   buildUserList();
+  updateCloudBadge();
   if(currentUser){
     var af=document.getElementById('agFirma');
     if(af && document.activeElement!==af){af.value=firma.name||'';}
@@ -1697,15 +1702,47 @@ function isFirebaseConfigured(){
          FIREBASE_CONFIG.projectId.indexOf('HIER_')!==0 &&
          FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('HIER_')!==0;
 }
+var lastCloudSyncAt=null; // Zeitpunkt (Date) der letzten erfolgreich empfangenen/gesendeten Cloud-Daten
+var lastCloudSavedAt=null; // "savedAt"-Feld aus dem zuletzt empfangenen Cloud-Dokument -> zum Geräte-Abgleich
+function updateCloudBadge(){
+  var dot=document.getElementById('cloudDot'),txt=document.getElementById('cloudStatusText');
+  if(!dot||!txt)return;
+  if(!isFirebaseConfigured()){dot.textContent='⚪';txt.textContent='Keine Cloud konfiguriert (nur lokal auf diesem Gerät)';return;}
+  if(!isOnline){dot.textContent='🔴';txt.textContent='Offline — Protokolle/Einträge liegen nur lokal, bis wieder Internet da ist';return;}
+  if(firebaseReady&&cloudSynced){
+    dot.textContent='🟢';
+    txt.textContent='Cloud verbunden'+(lastCloudSyncAt?' · zuletzt synchronisiert '+pad(lastCloudSyncAt.getHours())+':'+pad(lastCloudSyncAt.getMinutes())+':'+pad(lastCloudSyncAt.getSeconds()):'');
+  } else if(firebaseReady&&!cloudSynced){
+    dot.textContent='🟡';txt.textContent='Verbinde mit Cloud…';
+  } else {
+    dot.textContent='🔴';txt.textContent='Keine Cloud-Verbindung — Änderungen bleiben NUR auf diesem Gerät (Backup empfohlen!)';
+  }
+}
+function showCloudDetail(){
+  var lines=[
+    'Firebase konfiguriert: '+(isFirebaseConfigured()?'Ja':'Nein'),
+    'Internetverbindung: '+(isOnline?'Ja':'Nein'),
+    'Mit Cloud verbunden: '+(firebaseReady&&cloudSynced?'Ja':'Nein'),
+    'Zuletzt synchronisiert: '+(lastCloudSyncAt?lastCloudSyncAt.toLocaleString('de-DE'):'noch nie'),
+    'Zeitstempel im Cloud-Dokument: '+(lastCloudSavedAt||'—'),
+    'Protokolle (lokal auf diesem Gerät): '+protokolle.length,
+    'Zeiteinträge (lokal auf diesem Gerät): '+entries.length
+  ];
+  alert('Cloud-Status\n\n'+lines.join('\n')+'\n\nWenn „Zuletzt synchronisiert" hier und auf dem anderen Gerät stark auseinanderliegt oder „Mit Cloud verbunden: Nein" steht, wurden Änderungen noch nicht geteilt.');
+}
+window.addEventListener('online',function(){setTimeout(updateCloudBadge,300);});
+window.addEventListener('offline',updateCloudBadge);
+setInterval(updateCloudBadge,10000);
 function initFirebase(){
-  if(!isFirebaseConfigured()){ return; }
+  if(!isFirebaseConfigured()){ updateCloudBadge(); return; }
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
     var db=firebase.firestore();
     docRef=db.collection('arbeitszeit').doc(COMPANY_ID);
     firebaseReady=true;
+    updateCloudBadge();
     docRef.onSnapshot(function(snap){
-      if(Date.now()<saveLock){ cloudSynced=true; pushToCloud(); return; }
+      if(Date.now()<saveLock){ cloudSynced=true;lastCloudSyncAt=new Date();updateCloudBadge(); pushToCloud(); return; }
       if(snap.exists){
         var d=snap.data();
         applyingSnapshot=true;
@@ -1721,19 +1758,26 @@ function initFirebase(){
         cloudProtDraft=d.protDraft||null;
         applyingSnapshot=false;
         cloudSynced=true;
+        lastCloudSyncAt=new Date();
+        lastCloudSavedAt=d.savedAt||null;
+        updateCloudBadge();
         saveLocal();
         refreshAll();
       } else {
         cloudSynced=true;
+        lastCloudSyncAt=new Date();
+        updateCloudBadge();
         pushToCloud();
       }
     }, function(err){
       console.warn('Firestore-Verbindung:',err);
       firebaseReady=false;
+      updateCloudBadge();
     });
   }catch(e){
     console.warn('Firebase-Init fehlgeschlagen:',e);
     firebaseReady=false;
+    updateCloudBadge();
   }
 }
 
