@@ -152,7 +152,7 @@ textarea{resize:vertical;min-height:52px}
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 12 · Notstromfähigkeit + Auftraggeber + Speicher-SNs + Prüfgeräte</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 13 · Fix: Timer-Reset nach Stopp, Protokoll-Entwurf beim Abmelden, Ω/Δ im PDF-Export</div>
 </div>
 
 <!-- MAIN APP -->
@@ -988,7 +988,18 @@ function checkLogin(){
   if(ok){currentUser=loginTarget;try{localStorage.setItem('az_session',JSON.stringify(loginTarget));}catch(e2){}document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').style.display='block';initApp();}
   else{document.getElementById('pinError').textContent='Falscher PIN.';document.getElementById('pinDots').classList.add('shake');setTimeout(function(){document.getElementById('pinDots').classList.remove('shake');},400);pinBuffer='';updatePinDots();}
 }
-function logout(){try{localStorage.removeItem('az_session');}catch(e){}currentUser=null;pinBuffer='';timerSec=0;pauseMins=0;timerRunning=false;clearInterval(timerInt);document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('pinStep').style.display='none';document.getElementById('userStep').style.display='block';buildUserList();}
+function logout(){
+  // Falls ein Protokoll-Formular offen ist: Entwurf SOFORT sichern (statt auf die 1,5s-Verzögerung zu warten)
+  // und den Nutzer klar warnen, dass es sich nur um einen Entwurf handelt (noch nicht in der Protokoll-Liste).
+  var pfv=document.getElementById('protFormView');
+  if(pfv&&pfv.style.display!=='none'){
+    clearTimeout(protDraftTimer);
+    saveProtDraft();
+    if(!confirm('Es ist noch ein Protokoll geöffnet, das nicht über „✓ Protokoll speichern" gesichert wurde.\n\nDer aktuelle Stand wurde als Entwurf gesichert und kann nach der nächsten Anmeldung im Reiter „Protokoll" wiederhergestellt werden — er erscheint aber erst nach dem Wiederherstellen UND anschließendem „✓ Protokoll speichern" in der Protokoll-Liste.\n\nTrotzdem jetzt abmelden?')){
+      return;
+    }
+  }
+  try{localStorage.removeItem('az_session');}catch(e){}currentUser=null;pinBuffer='';timerSec=0;pauseMins=0;timerRunning=false;clearInterval(timerInt);document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('pinStep').style.display='none';document.getElementById('userStep').style.display='block';buildUserList();}
 
 // ============ INIT ============
 function initApp(){
@@ -1127,9 +1138,18 @@ function restoreTimerIfRunning(){
 }
 function stopTimer(){
   if(!timerRunning)return;
+  if(timerSec>0){
+    if(!confirm('Die laufende Zeit ('+fmtH(timerSec)+') wurde noch NICHT gespeichert und geht beim Stoppen verloren.\n\nOK = trotzdem stoppen und Zeit verwerfen.\nAbbrechen = zurück und stattdessen auf „✓ Speichern" tippen, um die Zeit zu sichern.')){
+      return;
+    }
+  }
   clearInterval(timerInt);timerRunning=false;
   delete timers[userKey()];saveData();
-  document.getElementById('startBtn').disabled=false;document.getElementById('stopBtn').disabled=true;document.getElementById('statusBadge').className='bdg n';document.getElementById('statusBadge').textContent='Gestoppt';document.getElementById('timerSub').textContent='Gestoppt — '+fmtH(timerSec)+' erfasst';
+  timerSec=0;pauseMins=0;
+  document.getElementById('startBtn').disabled=false;document.getElementById('stopBtn').disabled=true;document.getElementById('statusBadge').className='bdg n';document.getElementById('statusBadge').textContent='Gestoppt';document.getElementById('timerSub').textContent='Nicht gestartet';
+  document.getElementById('timerDisp').textContent='00:00:00';
+  document.getElementById('todayNet').textContent='0,00 h';
+  document.getElementById('todayOver').textContent='+0,00 h';
 }
 function addPause(m){
   pauseMins+=m;
@@ -2510,6 +2530,12 @@ function protokollPDF(idx){
     buildProtokollPDF(p,pf,imgs);
   });
 }
+function pdfSafe(s){
+  // jsPDF-Standardschriften (Helvetica/Times/Courier) nutzen WinAnsi/Latin-1-Kodierung
+  // und enthalten KEINE griechischen Zeichen -> Ω und Δ würden als Kästchen/Leerzeichen
+  // angezeigt. Deshalb hier durch textliche Entsprechungen ersetzen.
+  return String(s==null?'':s).replace(/Ω/g,'Ohm').replace(/Δ/g,'d');
+}
 function buildProtokollPDF(p,pf,imgs){
   var jsPDF=window.jspdf.jsPDF;
   var doc=new jsPDF({unit:'mm',format:'a4'});
@@ -2518,6 +2544,7 @@ function buildProtokollPDF(p,pf,imgs){
   function h1(t){doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(17,17,17);doc.text(t,M,y);y+=6;}
   function h2(t){nl(10);doc.setFillColor(31,41,55);doc.rect(M,y-4,PW-2*M,6,'F');doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(255,255,255);doc.text(t,M+2,y);y+=6;}
   function kv(rows){
+    rows=rows.map(function(r){return [r[0],pdfSafe(r[1])];});
     doc.autoTable({startY:y,body:rows,theme:'plain',
       styles:{font:'helvetica',fontSize:8.5,cellPadding:1.1,textColor:[40,40,40]},
       columnStyles:{0:{fontStyle:'bold',cellWidth:52,textColor:[100,100,100]}},margin:{left:M,right:M}});
@@ -2568,7 +2595,7 @@ function buildProtokollPDF(p,pf,imgs){
   if(!isWb&&p.strings&&p.strings.length){
     h2('Strangmessungen (DC)');
     doc.autoTable({startY:y,
-      head:[['Strang','Module','Polarität','Uoc (V)','Isc (A)','Riso (MΩ)','Erdung (Ω)']],
+      head:[['Strang','Module','Polarität','Uoc (V)','Isc (A)','Riso (MOhm)','Erdung (Ohm)']],
       body:p.strings.map(function(s,i){return [i+1,s.anz||'-',s.pol==='nein'?'n.i.O.':'i.O.',s.uoc||'-',s.isc||'-',s.riso||'-',s.erd||'-'];}),
       theme:'grid',styles:{font:'helvetica',fontSize:8,cellPadding:1.5,halign:'center'},
       headStyles:{fillColor:[240,240,240],textColor:[40,40,40],fontStyle:'bold'},margin:{left:M,right:M}});
@@ -2607,9 +2634,9 @@ function buildProtokollPDF(p,pf,imgs){
   triTable('Prüfung nach DIN VDE 0100-600 — Besichtigen',VDE_BES,v.bes||{});
   triTable('DIN VDE 0100-600 — Erproben',VDE_ERP,v.erp||{});
   if(v.kreise&&v.kreise.length){
-    nl(20);h2('DIN VDE 0100-600 — Messen'+(v.verteiler?' · Verteiler '+v.verteiler:''));
+    nl(20);h2('DIN VDE 0100-600 — Messen'+(v.verteiler?' · Verteiler '+pdfSafe(v.verteiler):''));
     doc.autoTable({startY:y,
-      head:[['Nr.','Zielbezeichnung','Leitung','Anz.×mm²','Sicherung','In (A)','Zs (Ω)','Riso (MΩ)','IΔn (mA)','tA (ms)']],
+      head:[['Nr.','Zielbezeichnung','Leitung','Anz.×mm²','Sicherung','In (A)','Zs (Ohm)','Riso (MOhm)','Idn (mA)','tA (ms)']],
       body:v.kreise.map(function(k,i){return [i+1,k.ziel||'-',k.typ||'-',k.quer||'-',k.sich||'-',k.inA||'-',k.zs||'-',k.riso||'-',k.idn||'-',k.ta||'-'];}),
       theme:'grid',styles:{font:'helvetica',fontSize:7,cellPadding:1.2,halign:'center'},
       headStyles:{fillColor:[240,240,240],textColor:[40,40,40],fontStyle:'bold'},
@@ -2618,7 +2645,7 @@ function buildProtokollPDF(p,pf,imgs){
   }
   var paSel=VDE_PA.filter(function(c){return v.pa&&v.pa[c[0]];}).map(function(c){return c[1];});
   if(paSel.length){
-    nl(12);h2('Durchgängigkeit Potentialausgleich (< 1 Ω nachgewiesen)');
+    nl(12);h2('Durchgängigkeit Potentialausgleich (< 1 Ohm nachgewiesen)');
     doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(40,40,40);
     var pat=doc.splitTextToSize(paSel.join('  ·  '),PW-2*M);
     doc.text(pat,M,y);y+=pat.length*3.8+3;
@@ -2628,14 +2655,14 @@ function buildProtokollPDF(p,pf,imgs){
   kv([
     ['Netzform / Netzbetreiber',(p.ac.netz||'—')+(p.ac.betreiber?' · '+p.ac.betreiber:'')],
     ['RCD',(p.ac.rcd||'—')+(p.ac.rcdMs?' · Auslösezeit '+p.ac.rcdMs+' ms':'')],
-    ['Schutzleiter / Erdung','Durchgängigkeit '+(p.ac.schutzl||'—')+' Ω · RE '+(p.ac.re||'—')+' Ω'],
-    ['Riso AC / Zs',(p.ac.riso||'—')+' MΩ · Zs '+(p.ac.zs||'—')+' Ω']
+    ['Schutzleiter / Erdung','Durchgängigkeit '+(p.ac.schutzl||'—')+' Ohm · RE '+(p.ac.re||'—')+' Ohm'],
+    ['Riso AC / Zs',(p.ac.riso||'—')+' MOhm · Zs '+(p.ac.zs||'—')+' Ohm']
   ]);
   // Stückliste
   if(p.material&&p.material.length){
     nl(20);h2('Stückliste / verbautes Material');
     doc.autoTable({startY:y,head:[['Pos.','Menge','Einheit','Bezeichnung']],
-      body:p.material.map(function(m,i){return [i+1,m.menge,m.einheit,m.bez];}),
+      body:p.material.map(function(m,i){return [i+1,m.menge,m.einheit,pdfSafe(m.bez)];}),
       theme:'grid',styles:{font:'helvetica',fontSize:8,cellPadding:1.5},
       headStyles:{fillColor:[31,41,55],textColor:[255,255,255],fontStyle:'bold'},
       columnStyles:{0:{cellWidth:12,halign:'center'},1:{cellWidth:16,halign:'center'},2:{cellWidth:18,halign:'center'}},
@@ -2644,7 +2671,7 @@ function buildProtokollPDF(p,pf,imgs){
   }
   // Zusatzleistungen / Ergebnis
   if(p.zusatz){nl(16);h2('Zusatzleistungen');doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(40,40,40);
-    var zl=doc.splitTextToSize(p.zusatz,PW-2*M);doc.text(zl,M,y);y+=zl.length*4+3;}
+    var zl=doc.splitTextToSize(pdfSafe(p.zusatz),PW-2*M);doc.text(zl,M,y);y+=zl.length*4+3;}
   nl(24);h2('Prüfergebnis');
   doc.setFont('helvetica','bold');doc.setFontSize(9.5);
   if(p.ergebnis==='mit'){doc.setTextColor(185,28,28);doc.text('[x] Es wurden Mängel festgestellt',M,y);}
@@ -2652,12 +2679,12 @@ function buildProtokollPDF(p,pf,imgs){
   y+=5;
   doc.setTextColor(40,40,40);doc.setFont('helvetica','normal');doc.setFontSize(8.5);
   doc.text((p.regeln?'[x]':'[  ]')+' Die Photovoltaikanlage entspricht den anerkannten Regeln der Elektrotechnik',M,y);y+=5;
-  if(p.ergebnis==='mit'&&p.maengel){var ml=doc.splitTextToSize('Mängel: '+p.maengel,PW-2*M);doc.text(ml,M,y);y+=ml.length*4+2;}
-  if(p.bemerk){var bl=doc.splitTextToSize('Bemerkungen: '+p.bemerk,PW-2*M);doc.text(bl,M,y);y+=bl.length*4+2;}
+  if(p.ergebnis==='mit'&&p.maengel){var ml=doc.splitTextToSize('Mängel: '+pdfSafe(p.maengel),PW-2*M);doc.text(ml,M,y);y+=ml.length*4+2;}
+  if(p.bemerk){var bl=doc.splitTextToSize('Bemerkungen: '+pdfSafe(p.bemerk),PW-2*M);doc.text(bl,M,y);y+=bl.length*4+2;}
   // Fotos
   var okImgs=imgs?imgs.filter(function(x){return !!x;}):[];
   if(okImgs.length){
-    nl(20);h2('Foto-Dokumentation ('+okImgs.length+' Fotos · Baustelle '+(p.baustelle||'')+')');
+    nl(20);h2('Foto-Dokumentation ('+okImgs.length+' Fotos · Baustelle '+pdfSafe(p.baustelle||'')+')');
     var iw=(PW-2*M-6)/2;
     for(var i=0;i<okImgs.length;i+=2){
       var ih1=okImgs[i].h*iw/okImgs[i].w;
@@ -2666,10 +2693,10 @@ function buildProtokollPDF(p,pf,imgs){
       nl(rowH+10);
       try{doc.addImage(okImgs[i].data,'JPEG',M,y,iw,Math.min(70,ih1));}catch(e){}
       doc.setFontSize(7);doc.setTextColor(120,120,120);
-      doc.text((pf[i].datum||'')+' '+(pf[i].zeit||'')+(pf[i].notiz?' · '+pf[i].notiz.substring(0,60):''),M,y+Math.min(70,ih1)+3);
+      doc.text((pf[i].datum||'')+' '+(pf[i].zeit||'')+(pf[i].notiz?' · '+pdfSafe(pf[i].notiz.substring(0,60)):''),M,y+Math.min(70,ih1)+3);
       if(okImgs[i+1]){
         try{doc.addImage(okImgs[i+1].data,'JPEG',M+iw+6,y,iw,Math.min(70,ih2));}catch(e){}
-        doc.text((pf[i+1].datum||'')+' '+(pf[i+1].zeit||'')+(pf[i+1].notiz?' · '+pf[i+1].notiz.substring(0,60):''),M+iw+6,y+Math.min(70,ih2)+3);
+        doc.text((pf[i+1].datum||'')+' '+(pf[i+1].zeit||'')+(pf[i+1].notiz?' · '+pdfSafe(pf[i+1].notiz.substring(0,60)):''),M+iw+6,y+Math.min(70,ih2)+3);
       }
       y+=rowH+8;
     }
@@ -2707,7 +2734,7 @@ function stuecklistePDF(idx){
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(100,100,100);
   doc.text((p.errichter.name||'')+'  ·  Projekt: '+(p.baustelle||p.kunde.name||'')+'  ·  '+fmtDateDE(p.datum),M,25);
   doc.autoTable({startY:30,head:[['Pos.','Menge','Einheit','Bezeichnung']],
-    body:p.material.map(function(m,i){return [i+1,m.menge,m.einheit,m.bez];}),
+    body:p.material.map(function(m,i){return [i+1,m.menge,m.einheit,pdfSafe(m.bez)];}),
     theme:'grid',styles:{font:'helvetica',fontSize:9,cellPadding:2},
     headStyles:{fillColor:[31,41,55],textColor:[255,255,255],fontStyle:'bold'},
     columnStyles:{0:{cellWidth:14,halign:'center'},1:{cellWidth:18,halign:'center'},2:{cellWidth:20,halign:'center'}},
