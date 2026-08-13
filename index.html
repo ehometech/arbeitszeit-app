@@ -132,7 +132,7 @@ textarea{resize:vertical;min-height:52px}
   <div class="login-card">
     <div style="font-size:40px;margin-bottom:12px">⏱</div>
     <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit App</div>
-    <div style="font-size:13px;color:#888;margin-bottom:20px">v12 · Notstromfähigkeit + Auftraggeber + Speicher-SNs + Prüfgeräte</div>
+    <div style="font-size:13px;color:#888;margin-bottom:20px">v14 · Fix: Speicher-Rückmeldung bei Zeiterfassung + Timer-Inkonsistenz bei Schnell-Speichern</div>
     <div id="userStep">
       <div id="userList"></div>
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0">
@@ -916,6 +916,8 @@ var docRef=null;
 var applyingSnapshot=false;
 var saveLock=0;
 var cloudProtDraft=null; // Protokoll-Entwurf zusätzlich in Firestore für geräteübergreifendes Arbeiten
+var localSavedAt=null; // Zeitstempel des zuletzt lokal gespeicherten Datenstands (ISO-String)
+var pendingCloudPush=false; // true, wenn lokal gespeichert wurde, bevor die Cloud-Verbindung bereit/synchron war -> Push nachholen sobald möglich
 var isOnline=navigator.onLine;
 var offlineQueue=[];
 
@@ -988,7 +990,7 @@ function checkLogin(){
   var ok=false;
   if(loginTarget.type==='ag'&&pinBuffer===APP_PIN)ok=true;
   if(loginTarget.type==='ma'){var ma=employees[loginTarget.idx];if(ma&&pinBuffer===String(ma.pin))ok=true;}
-  if(ok){currentUser=loginTarget;try{localStorage.setItem('az_session',JSON.stringify(loginTarget));}catch(e2){}document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').style.display='block';initApp();}
+  if(ok){currentUser=loginTarget;try{sessionStorage.setItem('az_session',JSON.stringify(loginTarget));}catch(e2){}document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').style.display='block';initApp();}
   else{document.getElementById('pinError').textContent='Falscher PIN.';document.getElementById('pinDots').classList.add('shake');setTimeout(function(){document.getElementById('pinDots').classList.remove('shake');},400);pinBuffer='';updatePinDots();}
 }
 function logout(){
@@ -1002,7 +1004,7 @@ function logout(){
       return;
     }
   }
-  try{localStorage.removeItem('az_session');}catch(e){}currentUser=null;pinBuffer='';timerSec=0;pauseMins=0;timerRunning=false;clearInterval(timerInt);document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('pinStep').style.display='none';document.getElementById('userStep').style.display='block';buildUserList();}
+  try{sessionStorage.removeItem('az_session');}catch(e){}currentUser=null;pinBuffer='';timerSec=0;pauseMins=0;timerRunning=false;clearInterval(timerInt);document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('pinStep').style.display='none';document.getElementById('userStep').style.display='block';buildUserList();}
 
 // ============ INIT ============
 function initApp(){
@@ -1140,9 +1142,9 @@ function restoreTimerIfRunning(){
     document.getElementById('todayOver').textContent='+0,00 h';
   }
 }
-function stopTimer(){
+function stopTimer(skipConfirm){
   if(!timerRunning)return;
-  if(timerSec>0){
+  if(timerSec>0 && !skipConfirm){
     if(!confirm('Die laufende Zeit ('+fmtH(timerSec)+') wurde noch NICHT gespeichert und geht beim Stoppen verloren.\n\nOK = trotzdem stoppen und Zeit verwerfen.\nAbbrechen = zurück und stattdessen auf „✓ Speichern" tippen, um die Zeit zu sichern.')){
       return;
     }
@@ -1161,7 +1163,7 @@ function addPause(m){
   if(timers[key]){timers[key].pauseMins=pauseMins;saveData();}
   alert(m+' Min Pause. Gesamt: '+pauseMins+' Min.');
 }
-function saveQuick(){if(timerSec===0){alert('Kein aktiver Timer.');return;}stopTimer();var net=Math.max(0,(timerSec-pauseMins*60)/3600);var maIdx=isAG()?0:activeMaIdx();entries.unshift({ma:maIdx,dat:todayStr(),typ:'arbeit',start:'--',end:'--',pause:pauseMins,ort:'',notiz:'',h:parseFloat(net.toFixed(2))});timerSec=0;pauseMins=0;document.getElementById('timerDisp').textContent='00:00:00';document.getElementById('timerSub').textContent='Nicht gestartet';document.getElementById('todayNet').textContent='0,00 h';document.getElementById('todayOver').textContent='+0,00 h';document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';renderRecent();saveData();alert('Gespeichert!');}
+function saveQuick(){if(timerSec===0){alert('Kein aktiver Timer.');return;}var net=Math.max(0,(timerSec-pauseMins*60)/3600);var maIdx=isAG()?0:activeMaIdx();stopTimer(true);entries.unshift({ma:maIdx,dat:todayStr(),typ:'arbeit',start:'--',end:'--',pause:pauseMins,ort:'',notiz:'',h:parseFloat(net.toFixed(2))});timerSec=0;pauseMins=0;document.getElementById('timerDisp').textContent='00:00:00';document.getElementById('timerSub').textContent='Nicht gestartet';document.getElementById('todayNet').textContent='0,00 h';document.getElementById('todayOver').textContent='+0,00 h';document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';renderRecent();var cloudSave=saveData();cloudSave.then(function(ok){alert(ok?'Gespeichert und mit Cloud synchronisiert!':'Lokal gespeichert. Cloud-Sync folgt automatisch, sobald die Verbindung steht.');}).catch(function(){alert('Lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});}
 
 // ============ RECENT ============
 function renderRecent(){
@@ -1176,9 +1178,9 @@ function calcNetto(){var s=document.getElementById('eingStart').value;var e=docu
 function toggleTyp(){document.getElementById('zeitBlock').style.display=(document.getElementById('eingTyp').value==='arbeit'||document.getElementById('eingTyp').value==='schule')?'block':'none';}
 function renderMASelect(){var el=document.getElementById('eingMA');if(!el)return;el.innerHTML=employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
 function saveEntry(){var typ=document.getElementById('eingTyp').value;var s=document.getElementById('eingStart').value;var e=document.getElementById('eingEnd').value;var p=parseInt(document.getElementById('eingPause').value)||0;var net=0;if(typ==='arbeit'||typ==='schule'){if(!s||!e){alert('Bitte Start und Ende eingeben.');return;}var sm=parseInt(s.split(':')[0])*60+parseInt(s.split(':')[1]);var em=parseInt(e.split(':')[0])*60+parseInt(e.split(':')[1]);net=Math.max(0,(em-sm-p)/60);}var maIdx=isAG()?parseInt(document.getElementById('eingMA').value)||0:activeMaIdx();var obj={ma:maIdx,dat:document.getElementById('eingDat').value,typ:typ,start:s,end:e,pause:p,ort:document.getElementById('eingOrt').value,notiz:document.getElementById('eingNotiz').value,h:parseFloat(net.toFixed(2))};
-if(editingEntryIdx>=0&&entries[editingEntryIdx]){entries[editingEntryIdx]=obj;editingEntryIdx=-1;var eb=document.getElementById('entryEditBanner');if(eb)eb.style.display='none';alert('Eintrag aktualisiert!');}
-else{entries.unshift(obj);alert('Eintrag gespeichert!');}
-renderRecent();renderMonth();saveData();clearEntry();}
+if(editingEntryIdx>=0&&entries[editingEntryIdx]){entries[editingEntryIdx]=obj;editingEntryIdx=-1;var eb=document.getElementById('entryEditBanner');if(eb)eb.style.display='none';renderRecent();renderMonth();var cs=saveData();cs.then(function(ok){alert(ok?'Eintrag aktualisiert und mit Cloud synchronisiert!':'Eintrag lokal aktualisiert. Cloud-Sync folgt automatisch.');}).catch(function(){alert('Eintrag lokal aktualisiert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});clearEntry();return;}
+else{entries.unshift(obj);}
+renderRecent();renderMonth();var cs2=saveData();cs2.then(function(ok){alert(ok?'Eintrag gespeichert und mit Cloud synchronisiert!':'Eintrag lokal gespeichert. Cloud-Sync folgt automatisch, sobald die Verbindung steht.');}).catch(function(){alert('Eintrag lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});clearEntry();}
 function editEntry(i){
   var e=entries[i];if(!e)return;
   editingEntryIdx=i;
@@ -1648,7 +1650,8 @@ function storageWorks(){
 }
 function saveLocal(){
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()}));
+    localSavedAt=new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:localSavedAt}));
   }catch(err){}
 }
 function loadLocal(){
@@ -1665,6 +1668,7 @@ function loadLocal(){
     if(data.firma)firma=data.firma;
     if(Array.isArray(data.protokolle))protokolle=data.protokolle;
     if(data.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},data.komponentenDB);
+    if(data.savedAt)localSavedAt=data.savedAt;
   }catch(err){}
 }
 function saveData(){
@@ -1674,10 +1678,15 @@ function saveData(){
 }
 function pushToCloud(){
   if(firebaseReady && cloudSynced && docRef && !applyingSnapshot){
-    return docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:new Date().toISOString()})
+    pendingCloudPush=false;
+    var ts=localSavedAt||new Date().toISOString();
+    return docRef.set({APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers,protokolle:protokolle,komponentenDB:komponentenDB,savedAt:ts})
       .then(function(){lastCloudSyncAt=new Date();updateCloudBadge();return true;})
-      .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);updateCloudBadge();throw e;});
+      .catch(function(e){console.warn('Cloud-Speichern fehlgeschlagen:',e);pendingCloudPush=true;updateCloudBadge();throw e;});
   }
+  // Cloud ist noch nicht bereit/synchron: Push nicht verloren gehen lassen, sondern nachholen,
+  // sobald die Verbindung steht (siehe initFirebase/onSnapshot).
+  if(!applyingSnapshot)pendingCloudPush=true;
   return Promise.resolve(false);
 }
 function refreshAll(){
@@ -1730,7 +1739,7 @@ function showCloudDetail(){
   ];
   alert('Cloud-Status\n\n'+lines.join('\n')+'\n\nWenn „Zuletzt synchronisiert" hier und auf dem anderen Gerät stark auseinanderliegt oder „Mit Cloud verbunden: Nein" steht, wurden Änderungen noch nicht geteilt.');
 }
-window.addEventListener('online',function(){setTimeout(updateCloudBadge,300);});
+window.addEventListener('online',function(){setTimeout(function(){updateCloudBadge();if(pendingCloudPush)pushToCloud();},300);});
 window.addEventListener('offline',updateCloudBadge);
 setInterval(updateCloudBadge,10000);
 function initFirebase(){
@@ -1745,24 +1754,40 @@ function initFirebase(){
       if(Date.now()<saveLock){ cloudSynced=true;lastCloudSyncAt=new Date();updateCloudBadge(); pushToCloud(); return; }
       if(snap.exists){
         var d=snap.data();
-        applyingSnapshot=true;
-        if(d.APP_PIN)APP_PIN=d.APP_PIN;
-        if(Array.isArray(d.employees))employees=d.employees;
-        if(Array.isArray(d.entries))entries=d.entries;
-        if(Array.isArray(d.fotos))fotos=d.fotos;
-        if(Array.isArray(d.baustellen))baustellen=d.baustellen;
-        if(d.timers)timers=d.timers;
-        if(d.firma)firma=d.firma;
-        if(Array.isArray(d.protokolle))protokolle=d.protokolle;
-        if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},d.komponentenDB);
-        cloudProtDraft=d.protDraft||null;
-        applyingSnapshot=false;
-        cloudSynced=true;
-        lastCloudSyncAt=new Date();
-        lastCloudSavedAt=d.savedAt||null;
-        updateCloudBadge();
-        saveLocal();
-        refreshAll();
+        // Zeitstempel-Vergleich: eine ältere/gleich alte Cloud-Kopie darf niemals neuere lokale
+        // Daten (z.B. gerade gespeichertes Protokoll) überschreiben. Nur eine wirklich neuere
+        // Cloud-Version wird übernommen; sonst wird stattdessen der lokale Stand hochgeladen.
+        var cloudTime=d.savedAt?new Date(d.savedAt).getTime():0;
+        var localTime=localSavedAt?new Date(localSavedAt).getTime():0;
+        if(cloudTime>localTime){
+          applyingSnapshot=true;
+          if(d.APP_PIN)APP_PIN=d.APP_PIN;
+          if(Array.isArray(d.employees))employees=d.employees;
+          if(Array.isArray(d.entries))entries=d.entries;
+          if(Array.isArray(d.fotos))fotos=d.fotos;
+          if(Array.isArray(d.baustellen))baustellen=d.baustellen;
+          if(d.timers)timers=d.timers;
+          if(d.firma)firma=d.firma;
+          if(Array.isArray(d.protokolle))protokolle=d.protokolle;
+          if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},d.komponentenDB);
+          cloudProtDraft=d.protDraft||null;
+          applyingSnapshot=false;
+          cloudSynced=true;
+          lastCloudSyncAt=new Date();
+          lastCloudSavedAt=d.savedAt||null;
+          updateCloudBadge();
+          saveLocal();
+          refreshAll();
+        } else {
+          // Lokaler Stand ist genauso aktuell oder neuer (z.B. lokal gespeichert, aber Push
+          // ist zuvor nicht durchgekommen) -> Cloud NICHT über lokale Daten legen, sondern
+          // umgekehrt den lokalen Stand jetzt in die Cloud schreiben.
+          cloudSynced=true;
+          lastCloudSyncAt=new Date();
+          lastCloudSavedAt=d.savedAt||null;
+          updateCloudBadge();
+          pushToCloud();
+        }
       } else {
         cloudSynced=true;
         lastCloudSyncAt=new Date();
@@ -1791,7 +1816,7 @@ if(!storageWorks()){
 buildUserList();
 // Sitzung wiederherstellen: Reload wirft nicht mehr aus dem Login
 try{
-  var _sess=JSON.parse(localStorage.getItem('az_session')||'null');
+  var _sess=JSON.parse(sessionStorage.getItem('az_session')||'null');
   if(_sess&&(_sess.type==='ag'||(_sess.type==='ma'&&employees[_sess.idx]))){
     currentUser=_sess;
     document.getElementById('loginScreen').style.display='none';
