@@ -916,7 +916,8 @@ var UPLOAD_PRESET = 'personliche_arbeitsstunden';
 var CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/image/upload';
 
 // ============ CLAUDE KI-KONFIGURATION ============
-var CLAUDE_API_KEY = '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';
+// API-Key ist sicher im Cloudflare Worker gespeichert (env.ANTHROPIC_API_KEY)
+var CLOUDFLARE_WORKER_URL = 'https://patient-resonance-0349.ehometech2024.workers.dev/';
 var kiUploadedFiles = []; // {name, base64, mimeType}
 
 // ============ GOOGLE CALENDAR CONFIG (öffentlich, ohne OAuth) ============
@@ -1414,13 +1415,10 @@ async function runKiAnalyse(){
       content.push({type:'text',text:'Dateiname: '+f.name});
     }
     content.push({type:'text',text:'Analysiere diese Dokumente/Fotos für ein PV-Anlage oder Wallbox Abnahmeprotokoll (DIN EN 62446 / DIN VDE 0100-722). Extrahiere alle erkennbaren Daten. Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (kein Text davor/danach):\n{"typ":"pv","auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","anlage":{"kwp":"","standort":"","inb":"","zaehler":"","zstand":"","notstrom":"nein"},"ausrichtungen":[{"ausr":"","neig":"","anz":""}],"module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"1","sn":""},"zsk":{"hersteller":"","typ":""},"netzbetreiber":"","geraete":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":"3-phasig"}}'});
-    var resp=await fetch('https://api.anthropic.com/v1/messages',{
+    var resp=await fetch(CLOUDFLARE_WORKER_URL,{
       method:'POST',
       headers:{
-        'Content-Type':'application/json',
-        'x-api-key':CLAUDE_API_KEY,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
+        'Content-Type':'application/json'
       },
       body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:2048,messages:[{role:'user',content:content}]})
     });
