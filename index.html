@@ -916,7 +916,7 @@ var UPLOAD_PRESET = 'personliche_arbeitsstunden';
 var CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/image/upload';
 
 // ============ CLAUDE KI-KONFIGURATION ============
-var CLAUDE_API_KEY = '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';
+var CLAUDE_API_KEY = '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';
 var kiUploadedFiles = []; // {name, base64, mimeType}
 
 // ============ GOOGLE CALENDAR CONFIG (öffentlich, ohne OAuth) ============
@@ -1422,9 +1422,13 @@ async function runKiAnalyse(){
         'anthropic-version':'2023-06-01',
         'anthropic-dangerous-direct-browser-access':'true'
       },
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:2048,messages:[{role:'user',content:content}]})
+      body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:2048,messages:[{role:'user',content:content}]})
     });
-    if(!resp.ok){var ed=await resp.json();throw new Error((ed.error&&ed.error.message)||'HTTP '+resp.status);}
+    if(!resp.ok){
+      var errText='HTTP '+resp.status;
+      try{var ed=await resp.json();errText=(ed.error&&ed.error.message)||errText;}catch(ex){}
+      throw new Error('API Fehler '+resp.status+': '+errText);
+    }
     var data=await resp.json();
     var txt=data.content[0].text.trim();
     var m=txt.match(/\{[\s\S]*\}/);
@@ -1437,9 +1441,20 @@ async function runKiAnalyse(){
     alert('✅ Das Protokoll wurde von Claude ausgefüllt!\n\nBitte alle Felder kurz prüfen und anschließend:\n→ Abschnitt 6: Unterschrift AG + Kunde einholen\n→ Dann „Protokoll speichern" und „PDF"');
   }catch(e){
     console.error('KI-Fehler:',e);
-    if(statusEl)statusEl.textContent='❌ Fehler: '+e.message;
+    var errMsg=e.message||String(e);
+    var diagnose='';
+    if(errMsg.includes('Failed to fetch')||errMsg.includes('NetworkError')||errMsg.includes('CORS')){
+      diagnose='\n\n→ CORS/Netzwerk-Fehler: Bitte in console.anthropic.com unter API Keys den Key aktivieren und "Allow browser origins" einstellen.';
+    }else if(errMsg.includes('401')||errMsg.includes('invalid_api_key')||errMsg.includes('authentication')){
+      diagnose='\n\n→ API Key ungültig. Bitte neuen Key erstellen und in der Datei eintragen.';
+    }else if(errMsg.includes('403')||errMsg.includes('permission')){
+      diagnose='\n\n→ Keine Berechtigung. Browser-Zugriff für diesen Key nicht aktiviert.';
+    }else if(errMsg.includes('429')){
+      diagnose='\n\n→ Zu viele Anfragen. Bitte kurz warten und erneut versuchen.';
+    }
+    if(statusEl)statusEl.textContent='❌ Fehler: '+errMsg;
     if(btn){btn.disabled=false;btn.textContent='🤖 KI ausfüllen';}
-    alert('KI-Analyse fehlgeschlagen:\n'+e.message+'\n\nBitte Internetverbindung prüfen.');
+    alert('KI-Analyse fehlgeschlagen:\n\nFEHLER: '+errMsg+diagnose);
   }
 }
 
