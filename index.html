@@ -103,6 +103,7 @@ textarea{resize:vertical;min-height:52px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAzQiFuH3yAd5jpD8xVegSs2UwT6pLTHEE&libraries=places"></script>
 </head>
 <body>
@@ -404,6 +405,40 @@ textarea{resize:vertical;min-height:52px}
           <button class="btn" style="flex:0;padding:8px 12px;font-size:16px" onclick="protSectStep(-1)">‹</button>
           <select id="protSectSel" style="flex:1;margin:0" onchange="showProtSect(this.value)"></select>
           <button class="btn" style="flex:0;padding:8px 12px;font-size:16px" onclick="protSectStep(1)">›</button>
+        </div>
+      </div>
+
+      <!-- KI-ASSISTENT KARTE -->
+      <div class="card" style="border:2px solid #2563eb;background:#eff6ff">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="font-size:24px">🤖</div>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#1e40af">KI-Assistent — Protokoll automatisch ausfüllen</div>
+            <div style="font-size:11px;color:#3b82f6">Auftrag (PDF) + Typenschild-Fotos hochladen → Claude füllt alles aus</div>
+          </div>
+        </div>
+
+        <input type="file" id="kiFileInput" accept="image/*,application/pdf" multiple style="display:none" onchange="handleKiFiles(this.files)">
+
+        <div class="foto-upload-box" id="kiDropZone" onclick="document.getElementById('kiFileInput').click()" style="border-color:#93c5fd;background:#fff;margin-bottom:8px">
+          <div style="font-size:28px;margin-bottom:4px">📄 📷</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:2px">Auftrag (PDF) oder Typenschild-Fotos</div>
+          <div style="font-size:11px;color:#888">Tippe hier oder ziehe Dateien rein — PDF + Bilder möglich</div>
+        </div>
+
+        <div id="kiFileThumbs"></div>
+        <div id="kiUploadStatus" style="font-size:12px;color:#3b82f6;margin-top:4px;text-align:center;min-height:16px"></div>
+
+        <button id="kiAnalyseBtn" class="btn pri" style="width:100%;margin-top:10px;padding:12px 8px;font-size:14px;background:#2563eb;border-color:#2563eb" onclick="runKiAnalyse()">
+          🤖 KI ausfüllen — Protokoll automatisch befüllen
+        </button>
+        <div style="font-size:10px;color:#6b7280;margin-top:5px;text-align:center">
+          Danach nur noch Unterschriften von AG + Kunde einholen (Abschnitt 6)
+        </div>
+
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid #bfdbfe">
+          <div style="font-size:11px;font-weight:600;color:#1e40af;margin-bottom:4px">☁️ Projektordner (Firebase Storage)</div>
+          <div style="font-size:11px;color:#6b7280">Alle hochgeladenen Dateien werden automatisch in einem Projektordner gespeichert: <code style="background:#dbeafe;padding:1px 4px;border-radius:3px">firma1/projekte/{Baustelle}/dokumente/</code> und <code style="background:#dbeafe;padding:1px 4px;border-radius:3px">…/fotos/</code></div>
         </div>
       </div>
 
@@ -880,6 +915,10 @@ var CLOUD_NAME = 'ddbectnao';
 var UPLOAD_PRESET = 'personliche_arbeitsstunden';
 var CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/image/upload';
 
+// ============ CLAUDE KI-KONFIGURATION ============
+var CLAUDE_API_KEY = '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';
+var kiUploadedFiles = []; // {name, base64, mimeType}
+
 // ============ GOOGLE CALENDAR CONFIG (öffentlich, ohne OAuth) ============
 var GOOGLE_MAPS_API_KEY = 'AIzaSyAzQiFuH3yAd5jpD8xVegSs2UwT6pLTHEE'; // gleicher Key wird für Calendar API genutzt
 var CALENDAR_IDS = [
@@ -1058,6 +1097,9 @@ function initApp(){
   ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
   ub.addEventListener('dragleave',function(){ub.classList.remove('dragover');});
   ub.addEventListener('drop',function(e){e.preventDefault();ub.classList.remove('dragover');handleFotos(e.dataTransfer.files);});
+  // KI Drag&Drop
+  var kd=document.getElementById('kiDropZone');
+  if(kd){kd.addEventListener('dragover',function(e){e.preventDefault();kd.classList.add('dragover');});kd.addEventListener('dragleave',function(){kd.classList.remove('dragover');});kd.addEventListener('drop',function(e){e.preventDefault();kd.classList.remove('dragover');handleKiFiles(e.dataTransfer.files);});}
 }
 
 // ============ GPS ============
@@ -1275,6 +1317,150 @@ function storeOfflineFoto(blob,baustelle,notiz,maIdx){
     var tx=db.transaction('offlineFotos','readwrite');
     tx.objectStore('offlineFotos').add({blob:blob,baustelle:baustelle,notiz:notiz,ma:maIdx,datum:todayStr()});
   };
+}
+
+// ============ FIREBASE STORAGE — Projektordner ============
+// Ordnerstruktur: firma1/projekte/{baustelle}/fotos/  und  .../dokumente/
+// Firebase Storage Regeln müssen "allow read, write: if true;" gesetzt sein (öffentlich) oder angepasst werden.
+function uploadToFirebaseStorage(file, baustelle, typ) {
+  return new Promise(function(resolve, reject) {
+    if(!firebase.apps || !firebase.apps.length){reject(new Error('Firebase nicht bereit'));return;}
+    try{
+      var storage = firebase.storage();
+      var safeBau = (baustelle||'allgemein').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g,'_').substring(0,60);
+      var fname = Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      var path = COMPANY_ID+'/projekte/'+safeBau+'/'+typ+'/'+fname;
+      var ref = storage.ref(path);
+      ref.put(file).then(function(snap){
+        return snap.ref.getDownloadURL();
+      }).then(resolve).catch(reject);
+    }catch(e){reject(e);}
+  });
+}
+
+// ============ KI-ANALYSE MIT CLAUDE ============
+function fileToBase64(file){
+  return new Promise(function(resolve,reject){
+    var reader=new FileReader();
+    reader.onload=function(e){resolve(e.target.result.split(',')[1]);};
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function handleKiFiles(files){
+  if(!files||!files.length)return;
+  var statusEl=document.getElementById('kiUploadStatus');
+  if(statusEl)statusEl.textContent='⏳ '+files.length+' Datei(en) werden vorbereitet…';
+  var baustelle=(document.getElementById('pBaustelle')||{}).value||'Projekt';
+  var promises=Array.from(files).filter(function(f){
+    return f.type.startsWith('image/')||f.type==='application/pdf';
+  }).map(function(file){
+    return fileToBase64(file).then(function(b64){
+      var fi={name:file.name,base64:b64,mimeType:file.type,size:file.size};
+      // Auch in Firebase Storage hochladen
+      var typ=file.type.startsWith('image/')?'fotos':'dokumente';
+      uploadToFirebaseStorage(file,baustelle,typ).then(function(url){fi.storageUrl=url;}).catch(function(){});
+      return fi;
+    });
+  });
+  Promise.all(promises).then(function(newFiles){
+    kiUploadedFiles=kiUploadedFiles.concat(newFiles);
+    renderKiFileThumbs();
+    if(statusEl)statusEl.textContent='✅ '+kiUploadedFiles.length+' Datei(en) bereit — jetzt „🤖 KI ausfüllen" klicken!';
+  }).catch(function(e){
+    if(statusEl)statusEl.textContent='❌ Fehler beim Lesen: '+e.message;
+  });
+}
+
+function renderKiFileThumbs(){
+  var el=document.getElementById('kiFileThumbs');
+  if(!el)return;
+  if(!kiUploadedFiles.length){el.innerHTML='';return;}
+  el.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">'+kiUploadedFiles.map(function(f,i){
+    var isImg=f.mimeType.startsWith('image/');
+    var thumb=isImg
+      ?'<img src="data:'+f.mimeType+';base64,'+f.base64+'" style="width:56px;height:56px;object-fit:cover;border-radius:6px;display:block">'
+      :'<div style="width:56px;height:56px;background:#fee2e2;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px">📄</div>';
+    return '<div style="position:relative;text-align:center">'+thumb
+      +'<div style="font-size:9px;color:#888;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f.name+'</div>'
+      +'<button onclick="removeKiFile('+i+')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;font-size:10px;cursor:pointer;line-height:1;padding:0">✕</button>'
+      +'</div>';
+  }).join('')+'</div>';
+}
+
+function removeKiFile(i){
+  kiUploadedFiles.splice(i,1);
+  renderKiFileThumbs();
+  var s=document.getElementById('kiUploadStatus');
+  if(s)s.textContent=kiUploadedFiles.length?kiUploadedFiles.length+' Datei(en) bereit':'';
+}
+
+async function runKiAnalyse(){
+  if(!kiUploadedFiles.length){alert('Bitte zuerst Dokumente oder Fotos hochladen.');return;}
+  var btn=document.getElementById('kiAnalyseBtn');
+  var statusEl=document.getElementById('kiUploadStatus');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Claude analysiert…';}
+  if(statusEl)statusEl.textContent='🤖 Claude liest Ihre Dokumente und füllt das Protokoll aus…';
+  try{
+    var content=[];
+    for(var i=0;i<kiUploadedFiles.length;i++){
+      var f=kiUploadedFiles[i];
+      if(f.mimeType.startsWith('image/')){
+        content.push({type:'image',source:{type:'base64',media_type:f.mimeType,data:f.base64}});
+      }else if(f.mimeType==='application/pdf'){
+        content.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:f.base64}});
+      }
+      content.push({type:'text',text:'Dateiname: '+f.name});
+    }
+    content.push({type:'text',text:'Analysiere diese Dokumente/Fotos für ein PV-Anlage oder Wallbox Abnahmeprotokoll (DIN EN 62446 / DIN VDE 0100-722). Extrahiere alle erkennbaren Daten. Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (kein Text davor/danach):\n{"typ":"pv","auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","anlage":{"kwp":"","standort":"","inb":"","zaehler":"","zstand":"","notstrom":"nein"},"ausrichtungen":[{"ausr":"","neig":"","anz":""}],"module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"1","sn":""},"zsk":{"hersteller":"","typ":""},"netzbetreiber":"","geraete":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":"3-phasig"}}'});
+    var resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':CLAUDE_API_KEY,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:2048,messages:[{role:'user',content:content}]})
+    });
+    if(!resp.ok){var ed=await resp.json();throw new Error((ed.error&&ed.error.message)||'HTTP '+resp.status);}
+    var data=await resp.json();
+    var txt=data.content[0].text.trim();
+    var m=txt.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('Kein JSON in der Antwort');
+    var ai=JSON.parse(m[0]);
+    fillProtFromAI(ai);
+    if(statusEl)statusEl.textContent='✅ Fertig! Bitte alle Felder prüfen, dann Unterschriften holen.';
+    if(btn){btn.disabled=false;btn.textContent='🤖 KI erneut analysieren';}
+    showProtSect('allg');
+    alert('✅ Das Protokoll wurde von Claude ausgefüllt!\n\nBitte alle Felder kurz prüfen und anschließend:\n→ Abschnitt 6: Unterschrift AG + Kunde einholen\n→ Dann „Protokoll speichern" und „PDF"');
+  }catch(e){
+    console.error('KI-Fehler:',e);
+    if(statusEl)statusEl.textContent='❌ Fehler: '+e.message;
+    if(btn){btn.disabled=false;btn.textContent='🤖 KI ausfüllen';}
+    alert('KI-Analyse fehlgeschlagen:\n'+e.message+'\n\nBitte Internetverbindung prüfen.');
+  }
+}
+
+function fillProtFromAI(ai){
+  function set(id,v){var e=document.getElementById(id);if(e&&v!==undefined&&v!==null&&String(v).trim())e.value=String(v).trim();}
+  if(ai.auftraggeber){set('pAuftraggeber',ai.auftraggeber.name);set('pAufStr',ai.auftraggeber.str);set('pAufPlz',ai.auftraggeber.plz);set('pAufTel',ai.auftraggeber.tel);set('pAufMail',ai.auftraggeber.mail);}
+  if(ai.kunde){set('pKName',ai.kunde.name);set('pKStr',ai.kunde.str);set('pKPlz',ai.kunde.plz);set('pKTel',ai.kunde.tel);set('pKMail',ai.kunde.mail);}
+  if(ai.baustelle)set('pBaustelle',ai.baustelle);
+  if(ai.anlage){set('pAKwp',ai.anlage.kwp);set('pAStandort',ai.anlage.standort);set('pAInb',ai.anlage.inb);set('pAZaehler',ai.anlage.zaehler);set('pAZstand',ai.anlage.zstand);if(ai.anlage.notstrom)set('pANotstrom',ai.anlage.notstrom);}
+  if(ai.ausrichtungen&&ai.ausrichtungen.length){var aw=document.getElementById('ausrRows');if(aw){aw.innerHTML='';ai.ausrichtungen.forEach(function(a){if(a.ausr||a.neig)addAusrRow({ausr:a.ausr||'',neig:a.neig||'',anz:a.anz||''});});if(!aw.children.length)addAusrRow();}}
+  if(ai.module){set('pModHer',ai.module.hersteller);set('pModTyp',ai.module.typ);set('pModWp',ai.module.wp);set('pModAnz',ai.module.anzahl);set('pModIsc',ai.module.isc);set('pModUoc',ai.module.uoc);set('pModImpp',ai.module.impp);set('pModUmpp',ai.module.umpp);}
+  if(ai.wechselrichter&&ai.wechselrichter.length){var ww=document.getElementById('wrRows');if(ww){ww.innerHTML='';ai.wechselrichter.forEach(function(w){if(w.hersteller||w.typ)addWrRow({her:w.hersteller||'',typ:w.typ||'',w:w.leistung||'',anz:w.anzahl||1,sn:w.sn||''});});if(!ww.children.length)addWrRow();}}
+  if(ai.speicher){set('pSpHer',ai.speicher.hersteller);set('pSpTyp',ai.speicher.typ);set('pSpKwh',ai.speicher.kwh);set('pSpAnz',ai.speicher.anz||'1');if(ai.speicher.sn){var sw2=document.getElementById('spSnRows');if(sw2){sw2.innerHTML='';addSpSnRow(ai.speicher.sn);}}}
+  if(ai.zsk){set('pZskHer',ai.zsk.hersteller);set('pZskTyp',ai.zsk.typ);}
+  if(ai.netzbetreiber)set('pNetzbetreiber',ai.netzbetreiber);
+  if(ai.geraete)set('pGeraete',ai.geraete);
+  if(ai.typ)set('pTyp',ai.typ);
+  if(ai.wallbox&&(ai.wallbox.hersteller||ai.wallbox.typ)){set('pWbHer',ai.wallbox.hersteller);set('pWbTyp',ai.wallbox.typ);set('pWbSn',ai.wallbox.sn);set('pWbKw',ai.wallbox.kw);if(ai.wallbox.phasen)set('pWbPhasen',ai.wallbox.phasen);}
+  protFotoCount();
+  updateProtTyp();
+  queueProtDraft();
 }
 
 // ============ GALERIE ============
@@ -2490,6 +2676,11 @@ function openProtokollForm(p){
   protFotoCount();
   sigInited=false;sigPads={};
   pendingSigs={a:(p&&p.sigAuftraggeber)||'',k:(p&&p.sigKunde)||'',e:(p&&p.sigErrichter)||''};
+  // KI zurücksetzen
+  kiUploadedFiles=[];
+  var kt=document.getElementById('kiFileThumbs');if(kt)kt.innerHTML='';
+  var ks=document.getElementById('kiUploadStatus');if(ks)ks.textContent='';
+  var kb=document.getElementById('kiAnalyseBtn');if(kb){kb.disabled=false;kb.textContent='🤖 KI ausfüllen — Protokoll automatisch befüllen';}
   fillProtSectSel();
   showProtSect('allg');
   window.scrollTo(0,0);
