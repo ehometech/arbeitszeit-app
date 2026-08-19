@@ -412,12 +412,27 @@ textarea{resize:vertical;min-height:52px}
       <div class="card" style="border:2px solid #2563eb;background:#eff6ff">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <div style="font-size:24px">🤖</div>
-          <div>
+          <div style="flex:1">
             <div style="font-size:14px;font-weight:700;color:#1e40af">KI-Assistent — Protokoll automatisch ausfüllen</div>
-            <div style="font-size:11px;color:#3b82f6">Auftrag (PDF) + Typenschild-Fotos hochladen → Claude füllt alles aus</div>
+            <div style="font-size:11px;color:#3b82f6">Sprache 🎤 · Foto 📸 · Upload 📄 → Claude füllt alles aus</div>
           </div>
         </div>
 
+        <!-- Sprach- und Kamera-Buttons -->
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button id="kiMicBtn" onclick="toggleVoice()" style="flex:1;padding:12px 6px;border:2px solid #16a34a;background:#f0fdf4;border-radius:10px;font-size:12px;font-weight:600;color:#166534;cursor:pointer;transition:all 0.2s">
+            🎤 Sprachbefehl starten
+          </button>
+          <button onclick="document.getElementById('kiCameraInput').click()" style="flex:1;padding:12px 6px;border:2px solid #7c3aed;background:#faf5ff;border-radius:10px;font-size:12px;font-weight:600;color:#6d28d9;cursor:pointer">
+            📸 Foto aufnehmen
+          </button>
+        </div>
+        <input type="file" id="kiCameraInput" accept="image/*" capture="environment" style="display:none" onchange="handleKiCameraPhoto(this.files)">
+
+        <!-- Chat-Verlauf -->
+        <div id="kiChatBox" style="display:none;background:#fff;border:1px solid #bfdbfe;border-radius:10px;max-height:220px;overflow-y:auto;padding:8px 10px;margin-bottom:8px"></div>
+
+        <!-- Datei-Upload -->
         <input type="file" id="kiFileInput" accept="image/*,application/pdf" multiple style="display:none" onchange="handleKiFiles(this.files)">
 
         <div class="foto-upload-box" id="kiDropZone" onclick="document.getElementById('kiFileInput').click()" style="border-color:#93c5fd;background:#fff;margin-bottom:8px">
@@ -1474,6 +1489,163 @@ function fillProtFromAI(ai){
   protFotoCount();
   updateProtTyp();
   queueProtDraft();
+}
+
+// ============ KI SPRACHASSISTENT ============
+var kiSpeechRecognition = null;
+var kiVoiceActive = false;
+var kiChatHistory = []; // [{role:'user'|'assistant', content:'...'}]
+
+var KI_VOICE_SYSTEM_PROMPT = 'Du bist ein KI-Assistent für PV-Anlage und Wallbox Abnahmeprotokolle (DIN EN 62446 / DIN VDE 0100-722). Der Techniker spricht mit dir auf Deutsch.\n\nDeine Aufgaben:\n1. AUFTRAGGEBER/KUNDE: Wenn der Techniker Namen, Adressen, Telefon oder E-Mail nennt, extrahiere sie. Wenn Infos fehlen, frage gezielt nach.\n2. AUFMASS/MATERIALIEN: Wenn "Aufmaß" genannt wird oder Materialien (Module, Wechselrichter, Speicher, Kabel usw.), notiere sie in die Felder.\n3. MESSWERTE: Für Messwerte (Leerlaufspannung, Kurzschlussstrom, Isolationswiderstand usw.) frage IMMER nach dem genauen Wert. Nie einen Wert erfinden.\n4. UNBEKANNTE INFOS: Bei fehlenden Kunden-/Auftraggeberdaten, stelle gezielte Rückfragen.\n\nAntworte NUR mit diesem JSON (kein Text davor/danach):\n{"antwort":"Deine Antwort auf Deutsch","felder":{"auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"","sn":""},"geraete":"","netzbetreiber":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":""}},"fragen":[]}';
+
+function appendKiChat(role, text) {
+  var box = document.getElementById('kiChatBox');
+  if (!box) return;
+  box.style.display = 'block';
+  var isUser = role === 'user';
+  var div = document.createElement('div');
+  div.style.cssText = 'margin-bottom:8px;display:flex;flex-direction:column;align-items:' + (isUser ? 'flex-end' : 'flex-start');
+  var bubble = document.createElement('div');
+  bubble.style.cssText = 'max-width:88%;padding:7px 11px;border-radius:12px;font-size:12px;line-height:1.5;word-break:break-word;'
+    + (isUser ? 'background:#2563eb;color:#fff;border-bottom-right-radius:3px' : 'background:#f1f5f9;color:#1e293b;border-bottom-left-radius:3px');
+  bubble.textContent = (isUser ? '🎤 ' : '🤖 ') + text;
+  div.appendChild(bubble);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function initVoiceRecognition() {
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    alert('Spracherkennung wird in diesem Browser nicht unterstützt.\nBitte Google Chrome verwenden.');
+    return null;
+  }
+  var rec = new SpeechRec();
+  rec.lang = 'de-DE';
+  rec.continuous = true;
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  rec.onresult = function(e) {
+    var transcript = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) transcript += e.results[i][0].transcript;
+    }
+    if (transcript.trim()) runKiVoice(transcript.trim());
+  };
+  rec.onerror = function(e) {
+    console.error('Sprachfehler:', e.error);
+    if (e.error === 'no-speech') return;
+    setVoiceInactive();
+    if (e.error === 'not-allowed') alert('Mikrofon-Zugriff verweigert.\nBitte in den Browser-Einstellungen das Mikrofon erlauben.');
+  };
+  rec.onend = function() {
+    if (kiVoiceActive) { try { rec.start(); } catch(ex) {} }
+  };
+  return rec;
+}
+
+function setVoiceInactive() {
+  kiVoiceActive = false;
+  var btn = document.getElementById('kiMicBtn');
+  if (btn) {
+    btn.innerHTML = '🎤 Sprachbefehl starten';
+    btn.style.background = '#f0fdf4';
+    btn.style.borderColor = '#16a34a';
+    btn.style.color = '#166534';
+  }
+}
+
+function toggleVoice() {
+  if (kiVoiceActive) {
+    kiVoiceActive = false;
+    if (kiSpeechRecognition) { try { kiSpeechRecognition.stop(); } catch(ex) {} }
+    setVoiceInactive();
+    return;
+  }
+  if (!kiSpeechRecognition) kiSpeechRecognition = initVoiceRecognition();
+  if (!kiSpeechRecognition) return;
+  kiVoiceActive = true;
+  try { kiSpeechRecognition.start(); } catch(ex) { kiVoiceActive = false; return; }
+  var btn = document.getElementById('kiMicBtn');
+  if (btn) {
+    btn.innerHTML = '🔴 Aufnahme läuft… (tippen zum Stoppen)';
+    btn.style.background = '#fef2f2';
+    btn.style.borderColor = '#dc2626';
+    btn.style.color = '#dc2626';
+  }
+  var box = document.getElementById('kiChatBox');
+  if (box) box.style.display = 'block';
+  appendKiChat('assistant', 'Ich höre zu… Sprechen Sie z.B. Kundendaten, "Aufmaß" oder Materiallisten. Ich frage bei Messwerten immer nach.');
+}
+
+async function runKiVoice(transcript) {
+  appendKiChat('user', transcript);
+  kiChatHistory.push({role: 'user', content: transcript});
+  var statusEl = document.getElementById('kiUploadStatus');
+  if (statusEl) statusEl.textContent = '🤖 Claude verarbeitet Spracheingabe…';
+  try {
+    var verlauf = kiChatHistory.slice(0, -1).map(function(m) { return (m.role === 'user' ? 'Techniker' : 'KI') + ': ' + m.content; }).join('\n');
+    var prompt = KI_VOICE_SYSTEM_PROMPT + '\n\n' + (verlauf ? 'Bisheriger Verlauf:\n' + verlauf + '\n\n' : '') + 'Neue Nachricht vom Techniker: ' + transcript;
+    var resp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model: 'claude-haiku-4-5', max_tokens: 1024, messages: [{role: 'user', content: prompt}]})
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var txt = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text.trim() : '';
+    var m = txt.match(/\{[\s\S]*\}/);
+    if (!m) { appendKiChat('assistant', txt || 'Keine Antwort'); if (statusEl) statusEl.textContent = ''; return; }
+    var ai = JSON.parse(m[0]);
+    kiChatHistory.push({role: 'assistant', content: ai.antwort || txt});
+    if (ai.antwort) appendKiChat('assistant', ai.antwort);
+    // Felder befüllen
+    if (ai.felder) {
+      var f = ai.felder;
+      var nz = function(v) { return v && String(v).trim(); };
+      var hasData = false;
+      if (f.auftraggeber && (nz(f.auftraggeber.name) || nz(f.auftraggeber.str) || nz(f.auftraggeber.plz) || nz(f.auftraggeber.tel) || nz(f.auftraggeber.mail))) { hasData = true; fillProtFromAI({auftraggeber: f.auftraggeber}); }
+      if (f.kunde && (nz(f.kunde.name) || nz(f.kunde.str) || nz(f.kunde.plz) || nz(f.kunde.tel) || nz(f.kunde.mail))) { hasData = true; fillProtFromAI({kunde: f.kunde}); }
+      if (nz(f.baustelle)) { hasData = true; fillProtFromAI({baustelle: f.baustelle}); }
+      if (f.module && (nz(f.module.hersteller) || nz(f.module.typ) || nz(f.module.anzahl) || nz(f.module.wp))) { hasData = true; fillProtFromAI({module: f.module}); }
+      if (f.wechselrichter && f.wechselrichter.length && (nz(f.wechselrichter[0].hersteller) || nz(f.wechselrichter[0].typ))) { hasData = true; fillProtFromAI({wechselrichter: f.wechselrichter}); }
+      if (f.speicher && (nz(f.speicher.hersteller) || nz(f.speicher.typ) || nz(f.speicher.kwh))) { hasData = true; fillProtFromAI({speicher: f.speicher}); }
+      if (nz(f.geraete)) { hasData = true; fillProtFromAI({geraete: f.geraete}); }
+      if (nz(f.netzbetreiber)) { hasData = true; fillProtFromAI({netzbetreiber: f.netzbetreiber}); }
+      if (f.wallbox && (nz(f.wallbox.hersteller) || nz(f.wallbox.typ) || nz(f.wallbox.kw))) { hasData = true; fillProtFromAI({wallbox: f.wallbox}); }
+      if (hasData && statusEl) statusEl.textContent = '✅ Felder wurden eingetragen';
+      else if (statusEl) statusEl.textContent = '';
+    } else if (statusEl) statusEl.textContent = '';
+    // Rückfragen anzeigen
+    if (ai.fragen && ai.fragen.length) {
+      ai.fragen.forEach(function(q) { if (q && q.trim()) appendKiChat('assistant', '❓ ' + q); });
+    }
+  } catch(e) {
+    console.error('Sprach-KI Fehler:', e);
+    appendKiChat('assistant', '❌ Fehler: ' + e.message);
+    if (statusEl) statusEl.textContent = '❌ ' + e.message;
+  }
+}
+
+function handleKiCameraPhoto(files) {
+  if (!files || !files.length) return;
+  var statusEl = document.getElementById('kiUploadStatus');
+  var file = files[0];
+  if (!file.type.startsWith('image/')) { alert('Nur Bilder erlaubt.'); return; }
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var base64 = ev.target.result.split(',')[1];
+    kiUploadedFiles.push({name: file.name, base64: base64, mimeType: file.type});
+    renderKiFileThumbs();
+    if (statusEl) statusEl.textContent = '📸 Foto bereit — jetzt "KI ausfüllen" tippen';
+    appendKiChat('assistant', '📸 Foto hinzugefügt: ' + file.name + '. Tippen Sie auf "KI ausfüllen" um es zu analysieren.');
+    var box = document.getElementById('kiChatBox');
+    if (box) box.style.display = 'block';
+  };
+  reader.onerror = function() { alert('Foto konnte nicht geladen werden.'); };
+  reader.readAsDataURL(file);
+  // Reset damit dasselbe Foto erneut gewählt werden kann
+  document.getElementById('kiCameraInput').value = '';
 }
 
 // ============ GALERIE ============
