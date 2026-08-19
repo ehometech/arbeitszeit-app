@@ -418,6 +418,18 @@ textarea{resize:vertical;min-height:52px}
           </div>
         </div>
 
+        <!-- Rollen-Selektor -->
+        <div style="margin-bottom:8px;background:#fff;border:1.5px solid #93c5fd;border-radius:10px;padding:8px 10px">
+          <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:5px">📋 Diese Daten gehören zu:</div>
+          <select id="kiRolleSel" onchange="kiRolleChanged()" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:7px;font-size:13px;font-weight:600;background:#f8faff;color:#1e293b;cursor:pointer">
+            <option value="auto">🔄 Automatisch erkennen (KI entscheidet)</option>
+            <option value="auftraggeber">🏢 Auftraggeber (AG) — Firma / Besteller</option>
+            <option value="auftragnehmer">🔧 Auftragnehmer / Errichter (AN) — Installationsfirma</option>
+            <option value="kunde">👤 Betreiber / Kunde — Hausbesitzer / Anlagenbetreiber</option>
+          </select>
+          <div id="kiRolleHint" style="display:none;margin-top:5px;font-size:11px;padding:4px 8px;border-radius:6px;background:#fef9c3;color:#854d0e;font-weight:600"></div>
+        </div>
+
         <!-- Sprach- und Kamera-Buttons -->
         <div style="display:flex;gap:8px;margin-bottom:8px">
           <button id="kiMicBtn" onclick="toggleVoice()" style="flex:1;padding:12px 6px;border:2px solid #16a34a;background:#f0fdf4;border-radius:10px;font-size:12px;font-weight:600;color:#166534;cursor:pointer;transition:all 0.2s">
@@ -1474,6 +1486,7 @@ async function runKiAnalyse(){
 function fillProtFromAI(ai){
   function set(id,v){var e=document.getElementById(id);if(e&&v!==undefined&&v!==null&&String(v).trim())e.value=String(v).trim();}
   if(ai.auftraggeber){set('pAuftraggeber',ai.auftraggeber.name);set('pAufStr',ai.auftraggeber.str);set('pAufPlz',ai.auftraggeber.plz);set('pAufTel',ai.auftraggeber.tel);set('pAufMail',ai.auftraggeber.mail);}
+  if(ai.errichter){set('pEName',ai.errichter.name);set('pEStr',ai.errichter.str);set('pEPlz',ai.errichter.plz);}
   if(ai.kunde){set('pKName',ai.kunde.name);set('pKStr',ai.kunde.str);set('pKPlz',ai.kunde.plz);set('pKTel',ai.kunde.tel);set('pKMail',ai.kunde.mail);}
   if(ai.baustelle)set('pBaustelle',ai.baustelle);
   if(ai.anlage){set('pAKwp',ai.anlage.kwp);set('pAStandort',ai.anlage.standort);set('pAInb',ai.anlage.inb);set('pAZaehler',ai.anlage.zaehler);set('pAZstand',ai.anlage.zstand);if(ai.anlage.notstrom)set('pANotstrom',ai.anlage.notstrom);}
@@ -1481,11 +1494,13 @@ function fillProtFromAI(ai){
   if(ai.module){set('pModHer',ai.module.hersteller);set('pModTyp',ai.module.typ);set('pModWp',ai.module.wp);set('pModAnz',ai.module.anzahl);set('pModIsc',ai.module.isc);set('pModUoc',ai.module.uoc);set('pModImpp',ai.module.impp);set('pModUmpp',ai.module.umpp);}
   if(ai.wechselrichter&&ai.wechselrichter.length){var ww=document.getElementById('wrRows');if(ww){ww.innerHTML='';ai.wechselrichter.forEach(function(w){if(w.hersteller||w.typ)addWrRow({her:w.hersteller||'',typ:w.typ||'',w:w.leistung||'',anz:w.anzahl||1,sn:w.sn||''});});if(!ww.children.length)addWrRow();}}
   if(ai.speicher){set('pSpHer',ai.speicher.hersteller);set('pSpTyp',ai.speicher.typ);set('pSpKwh',ai.speicher.kwh);set('pSpAnz',ai.speicher.anz||'1');if(ai.speicher.sn){var sw2=document.getElementById('spSnRows');if(sw2){sw2.innerHTML='';addSpSnRow(ai.speicher.sn);}}}
+  if(ai.strings&&ai.strings.length){var sr=document.getElementById('stringRows');if(sr){sr.innerHTML='';ai.strings.forEach(function(s){addStringRow({anz:s.anz||'',pol:s.pol||'ja',uoc:s.uoc||'',isc:s.isc||'',riso:s.riso||'',erd:s.erd||''});});if(!sr.children.length)addStringRow();}}
   if(ai.zsk){set('pZskHer',ai.zsk.hersteller);set('pZskTyp',ai.zsk.typ);}
   if(ai.netzbetreiber)set('pNetzbetreiber',ai.netzbetreiber);
   if(ai.geraete)set('pGeraete',ai.geraete);
   if(ai.typ)set('pTyp',ai.typ);
   if(ai.wallbox&&(ai.wallbox.hersteller||ai.wallbox.typ)){set('pWbHer',ai.wallbox.hersteller);set('pWbTyp',ai.wallbox.typ);set('pWbSn',ai.wallbox.sn);set('pWbKw',ai.wallbox.kw);if(ai.wallbox.phasen)set('pWbPhasen',ai.wallbox.phasen);}
+  if(ai.material&&ai.material.length){var matEl=document.getElementById('matRows');if(matEl){ai.material.filter(function(m){return m&&m.bez&&m.bez.trim();}).forEach(function(m){var einheitMap={'Stk':'Stk','m':'m','Set':'Set','Pkg':'Pkg','Rolle':'Rolle','kg':'kg'};addMatRow({menge:m.menge||'',einheit:einheitMap[m.einheit]||'Stk',bez:m.bez.trim()});});}}
   protFotoCount();
   updateProtTyp();
   queueProtDraft();
@@ -1496,7 +1511,31 @@ var kiSpeechRecognition = null;
 var kiVoiceActive = false;
 var kiChatHistory = []; // [{role:'user'|'assistant', content:'...'}]
 
-var KI_VOICE_SYSTEM_PROMPT = 'Du bist ein KI-Assistent für PV-Anlage und Wallbox Abnahmeprotokolle (DIN EN 62446 / DIN VDE 0100-722). Der Techniker spricht mit dir auf Deutsch.\n\nDeine Aufgaben:\n1. AUFTRAGGEBER/KUNDE: Wenn der Techniker Namen, Adressen, Telefon oder E-Mail nennt, extrahiere sie. Wenn Infos fehlen, frage gezielt nach.\n2. AUFMASS/MATERIALIEN UND BESTÜCKUNGSLISTE: Wenn "Aufmaß" oder Materialien/Bestückungsliste genannt werden (z.B. "10 Stück DC-Kabel 6mm²", "2 Wechselrichter SMA", "3 Rollen Kabel", usw.), trage sie in die entsprechenden Felder ein. Für die Stückliste (material): erkenne Menge + Einheit (Stk/m/Set/Pkg/Rolle/kg) + Bezeichnung. Für Geräte-Komponenten: trage Hersteller, Typ, Anzahl, SN usw. in die entsprechenden Komponentenfelder ein.\n3. MESSWERTE: Für Messwerte (Leerlaufspannung, Kurzschlussstrom, Isolationswiderstand usw.) frage IMMER nach dem genauen Wert. Nie einen Wert erfinden.\n4. UNBEKANNTE INFOS: Bei fehlenden Kunden-/Auftraggeberdaten, stelle gezielte Rückfragen.\n\nAntworte NUR mit diesem JSON (kein Text davor/danach):\n{"antwort":"Deine Antwort auf Deutsch","felder":{"auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"","sn":""},"geraete":"","netzbetreiber":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":""},"material":[{"menge":"","einheit":"Stk","bez":""}]},"fragen":[]}';
+function kiRolleChanged() {
+  var sel = document.getElementById('kiRolleSel');
+  var hint = document.getElementById('kiRolleHint');
+  if (!sel || !hint) return;
+  var labels = {
+    auto: '',
+    auftraggeber: '🏢 Nächste Eingabe → Auftraggeber (AG)',
+    auftragnehmer: '🔧 Nächste Eingabe → Auftragnehmer / Errichter (AN)',
+    kunde: '👤 Nächste Eingabe → Betreiber / Kunde'
+  };
+  var txt = labels[sel.value] || '';
+  if (txt) { hint.textContent = txt; hint.style.display = 'block'; }
+  else hint.style.display = 'none';
+}
+
+function getKiRollenHinweis() {
+  var sel = document.getElementById('kiRolleSel');
+  var rolle = sel ? sel.value : 'auto';
+  if (rolle === 'auftraggeber') return '\n\n⚠️ ROLLENHINWEIS: Die folgenden Informationen gehören AUSSCHLIESSLICH zum AUFTRAGGEBER (AG) — der Firma oder Person, die den Auftrag erteilt hat. Trage die Daten NUR in das "auftraggeber"-Objekt ein. Lasse "errichter" und "kunde" leer.';
+  if (rolle === 'auftragnehmer') return '\n\n⚠️ ROLLENHINWEIS: Die folgenden Informationen gehören AUSSCHLIESSLICH zum AUFTRAGNEHMER / ERRICHTER (AN) — der Installationsfirma. Trage die Daten NUR in das "errichter"-Objekt ein. Lasse "auftraggeber" und "kunde" leer.';
+  if (rolle === 'kunde') return '\n\n⚠️ ROLLENHINWEIS: Die folgenden Informationen gehören AUSSCHLIESSLICH zum BETREIBER / KUNDEN — dem Hausbesitzer. Trage die Daten NUR in das "kunde"-Objekt ein. Lasse "auftraggeber" und "errichter" leer.';
+  return '';
+}
+
+var KI_VOICE_SYSTEM_PROMPT = 'Du bist ein KI-Assistent für PV-Anlage und Wallbox Abnahmeprotokolle (DIN EN 62446 / DIN VDE 0100-722). Der Techniker spricht mit dir auf Deutsch.\n\nRollen im Protokoll:\n- AUFTRAGGEBER (AG): Firma/Person die den Auftrag erteilt hat\n- AUFTRAGNEHMER/ERRICHTER (AN): die Installationsfirma\n- BETREIBER/KUNDE: der Hausbesitzer\n\nFeldstruktur (Begriffe die du kennen musst):\n- strings: Stränge/Strings der DC-Seite. Jeder String hat: anz (Modulanzahl), pol (Polarität: ja/nein), uoc (Leerlaufspannung V), isc (Kurzschlussstrom A), riso (Isolationswiderstand MΩ), erd (Erdungswiderstand Ω). Erkenne Anzahl Strings aus Aussagen wie "2 Strings", "3 Stränge", "2 MPP-Tracker" usw. → erstelle genau so viele Einträge.\n- wechselrichter: Array, ein Eintrag pro Gerät (hersteller, typ, leistung kW, anzahl, sn)\n- speicher: Objekt mit hersteller, typ, kwh, anz, sn (Seriennummer als Text)\n- module: Objekt mit hersteller, typ, wp (Wp), anzahl, isc, uoc, impp, umpp\n- material: Stückliste, Array mit menge + einheit (Stk/m/Set/Pkg/Rolle/kg) + bez\n\nRegeln:\n1. KONTAKTDATEN: erkenne Rolle aus Kontext oder Rollenhinweis, trage in richtige Felder\n2. STRINGS: wenn Anzahl Strings/Stränge genannt → füge genau so viele strings-Einträge ein. Messwerte (Uoc, Isc, Riso) frage IMMER nach!\n3. MATERIAL/AUFMASS: erkenne Menge + Einheit + Bezeichnung\n4. MESSWERTE allgemein: IMMER nachfragen, nie erfinden\n5. Bei Unklarheiten: gezielte Rückfragen stellen\n\nAntworte NUR mit diesem JSON (kein Text davor/danach):\n{"antwort":"Deine Antwort auf Deutsch","felder":{"auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"errichter":{"name":"","str":"","plz":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"","sn":""},"strings":[{"anz":"","pol":"ja","uoc":"","isc":"","riso":"","erd":""}],"geraete":"","netzbetreiber":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":""},"material":[{"menge":"","einheit":"Stk","bez":""}]},"fragen":[]}';
 
 function appendKiChat(role, text) {
   var box = document.getElementById('kiChatBox');
@@ -1585,7 +1624,7 @@ async function runKiVoice(transcript) {
   if (statusEl) statusEl.textContent = '🤖 Claude verarbeitet Spracheingabe…';
   try {
     var verlauf = kiChatHistory.slice(0, -1).map(function(m) { return (m.role === 'user' ? 'Techniker' : 'KI') + ': ' + m.content; }).join('\n');
-    var prompt = KI_VOICE_SYSTEM_PROMPT + '\n\n' + (verlauf ? 'Bisheriger Verlauf:\n' + verlauf + '\n\n' : '') + 'Neue Nachricht vom Techniker: ' + transcript;
+    var prompt = KI_VOICE_SYSTEM_PROMPT + getKiRollenHinweis() + '\n\n' + (verlauf ? 'Bisheriger Verlauf:\n' + verlauf + '\n\n' : '') + 'Neue Nachricht vom Techniker: ' + transcript;
     var resp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -1605,6 +1644,7 @@ async function runKiVoice(transcript) {
       var nz = function(v) { return v && String(v).trim(); };
       var hasData = false;
       if (f.auftraggeber && (nz(f.auftraggeber.name) || nz(f.auftraggeber.str) || nz(f.auftraggeber.plz) || nz(f.auftraggeber.tel) || nz(f.auftraggeber.mail))) { hasData = true; fillProtFromAI({auftraggeber: f.auftraggeber}); }
+      if (f.errichter && (nz(f.errichter.name) || nz(f.errichter.str) || nz(f.errichter.plz))) { hasData = true; fillProtFromAI({errichter: f.errichter}); }
       if (f.kunde && (nz(f.kunde.name) || nz(f.kunde.str) || nz(f.kunde.plz) || nz(f.kunde.tel) || nz(f.kunde.mail))) { hasData = true; fillProtFromAI({kunde: f.kunde}); }
       if (nz(f.baustelle)) { hasData = true; fillProtFromAI({baustelle: f.baustelle}); }
       if (f.module && (nz(f.module.hersteller) || nz(f.module.typ) || nz(f.module.anzahl) || nz(f.module.wp))) { hasData = true; fillProtFromAI({module: f.module}); }
@@ -1613,13 +1653,25 @@ async function runKiVoice(transcript) {
       if (nz(f.geraete)) { hasData = true; fillProtFromAI({geraete: f.geraete}); }
       if (nz(f.netzbetreiber)) { hasData = true; fillProtFromAI({netzbetreiber: f.netzbetreiber}); }
       if (f.wallbox && (nz(f.wallbox.hersteller) || nz(f.wallbox.typ) || nz(f.wallbox.kw))) { hasData = true; fillProtFromAI({wallbox: f.wallbox}); }
+      // Strings / Stränge
+      if (f.strings && f.strings.length) {
+        var validStrings = f.strings.filter(function(s) { return s && (nz(s.anz) || nz(s.uoc) || nz(s.isc)); });
+        // Auch leere Strings anlegen wenn Anzahl feststeht (z.B. "3 Strings" ohne Messwerte)
+        var strCount = f.strings.length;
+        if (strCount > 0) {
+          hasData = true;
+          fillProtFromAI({strings: f.strings});
+          var filled = validStrings.filter(function(s) { return nz(s.uoc) || nz(s.isc) || nz(s.riso); }).length;
+          appendKiChat('assistant', '🔌 ' + strCount + ' Strang-Zeile(n) angelegt' + (filled ? ', ' + filled + ' mit Messwerten' : ' — Messwerte bitte noch eintragen') + '.');
+        }
+      }
       // Stückliste / Bestückungsliste eintragen
       if (f.material && f.material.length) {
         var validMat = f.material.filter(function(mat) { return mat && nz(mat.bez); });
         if (validMat.length) {
           hasData = true;
+          var einheitMap = {'Stk':'Stk','m':'m','Set':'Set','Pkg':'Pkg','Rolle':'Rolle','kg':'kg','stück':'Stk','meter':'m','rolle':'Rolle'};
           validMat.forEach(function(mat) {
-            var einheitMap = {'Stk':'Stk','m':'m','Set':'Set','Pkg':'Pkg','Rolle':'Rolle','kg':'kg','stück':'Stk','meter':'m','rolle':'Rolle'};
             var einheit = einheitMap[mat.einheit] || einheitMap[(mat.einheit||'').toLowerCase()] || 'Stk';
             addMatRow({menge: mat.menge || '', einheit: einheit, bez: mat.bez.trim()});
           });
@@ -1667,7 +1719,8 @@ async function runKiPhotoChat(fileObj) {
   if (statusEl) statusEl.textContent = '🔍 Claude analysiert Foto…';
   appendKiChat('assistant', '🔍 Analysiere Foto…');
   try {
-    var photoPrompt = 'Analysiere dieses Foto für ein PV-Anlage oder Wallbox Abnahmeprotokoll.\n\nSchau genau hin und erkenne:\n- Was ist zu sehen? (Typenschild, Seriennummer-Aufkleber, Gerät, Anschlussplan?)\n- Zu welchem Gerät gehört es? (Speicher/Batterie, Wechselrichter, PV-Modul, Wallbox, Zähler, Kabelkanal?)\n- Welche Daten sind lesbar? (Seriennummer, Hersteller, Typ, Leistung kWp/kW/kWh, Spannung, Strom?)\n- Was ist nicht erkennbar oder mehrdeutig?\n\nWichtig: Wenn du eine Seriennummer siehst aber nicht sicher bist zu welchem Gerät sie gehört, frage in "fragen" explizit nach!\nWenn ein Wert nicht klar lesbar ist, schreib ihn NICHT in felder, sondern frage in "fragen" nach.\n\nAntworte NUR mit diesem JSON (kein Text davor/danach):\n{"antwort":"Beschreibe was du erkannt hast auf Deutsch und was eingetragen wurde","felder":{"auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"","sn":""},"geraete":"","netzbetreiber":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":""},"material":[]},"fragen":[]}';
+    var rollenHinweis = getKiRollenHinweis();
+    var photoPrompt = 'Analysiere dieses Foto für ein PV-Anlage oder Wallbox Abnahmeprotokoll.\n\nRollen: auftraggeber=Besteller/AG, errichter=Installationsfirma/AN, kunde=Hausbesitzer\n\nFeld strings = DC-Stränge: Erkenne Anzahl Strings wenn sichtbar (Strangplan, Klemmkasten, WR-Label mit MPP1/MPP2 usw.) → lege genau so viele Einträge in strings an.\n\nSchau genau hin:\n- Was ist zu sehen? (Typenschild, Seriennummer, Anschlussplan, Strangverdrahtung, Adresse?)\n- Zu welchem Gerät/Rolle gehört es?\n- Welche Daten sind lesbar? (SN, Hersteller, Typ, Leistung, Anzahl Strings/MPP-Tracker, Name, Adresse?)\n- Was ist unklar oder nicht lesbar?\n\nWichtig:\n- Seriennummer ohne klares Gerät → "fragen": "Zu welchem Gerät gehört die Seriennummer XY?"\n- Adresse/Name ohne klare Rolle → fragen nach AG/AN/Kunde\n- Nicht lesbare Werte → fragen, nie raten!' + rollenHinweis + '\n\nAntworte NUR mit diesem JSON:\n{"antwort":"Beschreibe was erkannt wurde auf Deutsch","felder":{"auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"errichter":{"name":"","str":"","plz":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"","sn":""},"strings":[{"anz":"","pol":"ja","uoc":"","isc":"","riso":"","erd":""}],"geraete":"","netzbetreiber":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":""},"material":[]},"fragen":[]}';
     var content = [
       {type: 'image', source: {type: 'base64', media_type: fileObj.mimeType, data: fileObj.base64}},
       {type: 'text', text: photoPrompt}
@@ -1689,8 +1742,9 @@ async function runKiPhotoChat(fileObj) {
       var f = ai.felder;
       var nz = function(v) { return v && String(v).trim(); };
       var hasData = false;
-      if (f.auftraggeber && nz(f.auftraggeber.name)) { hasData = true; fillProtFromAI({auftraggeber: f.auftraggeber}); }
-      if (f.kunde && nz(f.kunde.name)) { hasData = true; fillProtFromAI({kunde: f.kunde}); }
+      if (f.auftraggeber && (nz(f.auftraggeber.name) || nz(f.auftraggeber.str))) { hasData = true; fillProtFromAI({auftraggeber: f.auftraggeber}); }
+      if (f.errichter && (nz(f.errichter.name) || nz(f.errichter.str))) { hasData = true; fillProtFromAI({errichter: f.errichter}); }
+      if (f.kunde && (nz(f.kunde.name) || nz(f.kunde.str))) { hasData = true; fillProtFromAI({kunde: f.kunde}); }
       if (nz(f.baustelle)) { hasData = true; fillProtFromAI({baustelle: f.baustelle}); }
       if (f.module && (nz(f.module.hersteller) || nz(f.module.typ) || nz(f.module.wp) || nz(f.module.isc))) { hasData = true; fillProtFromAI({module: f.module}); }
       if (f.wechselrichter && f.wechselrichter.length && (nz(f.wechselrichter[0].hersteller) || nz(f.wechselrichter[0].typ) || nz(f.wechselrichter[0].sn))) { hasData = true; fillProtFromAI({wechselrichter: f.wechselrichter}); }
@@ -1698,6 +1752,11 @@ async function runKiPhotoChat(fileObj) {
       if (nz(f.geraete)) { hasData = true; fillProtFromAI({geraete: f.geraete}); }
       if (nz(f.netzbetreiber)) { hasData = true; fillProtFromAI({netzbetreiber: f.netzbetreiber}); }
       if (f.wallbox && (nz(f.wallbox.hersteller) || nz(f.wallbox.typ) || nz(f.wallbox.sn) || nz(f.wallbox.kw))) { hasData = true; fillProtFromAI({wallbox: f.wallbox}); }
+      if (f.strings && f.strings.length) {
+        hasData = true;
+        fillProtFromAI({strings: f.strings});
+        appendKiChat('assistant', '🔌 ' + f.strings.length + ' Strang-Zeile(n) erkannt und angelegt.');
+      }
       if (f.material && f.material.length) {
         f.material.filter(function(mat) { return mat && nz(mat.bez); }).forEach(function(mat) {
           hasData = true;
@@ -2512,7 +2571,9 @@ function addKreisRow(d){
     +'<div class="r2"><div><span class="lbl">Sicherung Art / Charakt.</span><input type="text" class="k-sich" placeholder="LS B" value="'+(d.sich||'')+'"></div>'
     +'<div><span class="lbl">In (A)</span><input type="text" class="k-in" value="'+(d.inA||'')+'"></div></div>'
     +'<div class="r2"><div><span class="lbl">Zs (Ω)</span><input type="text" class="k-zs" value="'+(d.zs||'')+'"></div>'
-    +'<div><span class="lbl">Riso (MΩ)</span><input type="text" class="k-riso" value="'+(d.riso||'')+'"></div></div>'
+    +'<div><span class="lbl">Ia Abschaltstrom (A)</span><input type="text" class="k-ia" placeholder="Ia bei tA" value="'+(d.ia||'')+'"></div></div>'
+    +'<div class="r2"><div><span class="lbl">Riso (MΩ)</span><input type="text" class="k-riso" value="'+(d.riso||'')+'"></div>'
+    +'<div><span class="lbl">Zs max zulässig (Ω)</span><input type="text" class="k-zsmax" placeholder="Zs,max" value="'+(d.zsmax||'')+'"></div></div>'
     +'<div class="r2"><div><span class="lbl">RCD IΔn (mA)</span><input type="text" class="k-idn" value="'+(d.idn||'')+'"></div>'
     +'<div><span class="lbl">RCD Ausl.zeit (ms)</span><input type="text" class="k-ta" value="'+(d.ta||'')+'"></div></div>';
   wrap.appendChild(div);
@@ -2525,6 +2586,7 @@ function collectKreise(){
   document.querySelectorAll('#kreisRows .string-row').forEach(function(r){
     out.push({ziel:r.querySelector('.k-ziel').value,typ:r.querySelector('.k-typ').value,quer:r.querySelector('.k-quer').value,
       sich:r.querySelector('.k-sich').value,inA:r.querySelector('.k-in').value,zs:r.querySelector('.k-zs').value,
+      ia:r.querySelector('.k-ia').value,zsmax:r.querySelector('.k-zsmax').value,
       riso:r.querySelector('.k-riso').value,idn:r.querySelector('.k-idn').value,ta:r.querySelector('.k-ta').value});
   });
   return out;
@@ -3150,8 +3212,8 @@ function buildProtokollPDF(p,pf,imgs){
   if(v.kreise&&v.kreise.length){
     nl(20);h2('DIN VDE 0100-600 — Messen'+(v.verteiler?' · Verteiler '+pdfSafe(v.verteiler):''));
     doc.autoTable({startY:y,
-      head:[['Nr.','Zielbezeichnung','Leitung','Anz.×mm²','Sicherung','In (A)','Zs (Ohm)','Riso (MOhm)','Idn (mA)','tA (ms)']],
-      body:v.kreise.map(function(k,i){return [i+1,k.ziel||'-',k.typ||'-',k.quer||'-',k.sich||'-',k.inA||'-',k.zs||'-',k.riso||'-',k.idn||'-',k.ta||'-'];}),
+      head:[['Nr.','Zielbezeichnung','Leitung','Anz.×mm²','Sicherung','In (A)','Zs (Ω)','Ia (A)','Zs,max (Ω)','Riso (MΩ)','Idn (mA)','tA (ms)']],
+      body:v.kreise.map(function(k,i){return [i+1,k.ziel||'-',k.typ||'-',k.quer||'-',k.sich||'-',k.inA||'-',k.zs||'-',k.ia||'-',k.zsmax||'-',k.riso||'-',k.idn||'-',k.ta||'-'];}),
       theme:'grid',styles:{font:'helvetica',fontSize:7,cellPadding:1.2,halign:'center'},
       headStyles:{fillColor:[240,240,240],textColor:[40,40,40],fontStyle:'bold'},
       columnStyles:{1:{halign:'left'}},margin:{left:M,right:M}});
