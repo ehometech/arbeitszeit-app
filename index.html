@@ -1496,7 +1496,7 @@ var kiSpeechRecognition = null;
 var kiVoiceActive = false;
 var kiChatHistory = []; // [{role:'user'|'assistant', content:'...'}]
 
-var KI_VOICE_SYSTEM_PROMPT = 'Du bist ein KI-Assistent für PV-Anlage und Wallbox Abnahmeprotokolle (DIN EN 62446 / DIN VDE 0100-722). Der Techniker spricht mit dir auf Deutsch.\n\nDeine Aufgaben:\n1. AUFTRAGGEBER/KUNDE: Wenn der Techniker Namen, Adressen, Telefon oder E-Mail nennt, extrahiere sie. Wenn Infos fehlen, frage gezielt nach.\n2. AUFMASS/MATERIALIEN: Wenn "Aufmaß" genannt wird oder Materialien (Module, Wechselrichter, Speicher, Kabel usw.), notiere sie in die Felder.\n3. MESSWERTE: Für Messwerte (Leerlaufspannung, Kurzschlussstrom, Isolationswiderstand usw.) frage IMMER nach dem genauen Wert. Nie einen Wert erfinden.\n4. UNBEKANNTE INFOS: Bei fehlenden Kunden-/Auftraggeberdaten, stelle gezielte Rückfragen.\n\nAntworte NUR mit diesem JSON (kein Text davor/danach):\n{"antwort":"Deine Antwort auf Deutsch","felder":{"auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"","sn":""},"geraete":"","netzbetreiber":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":""}},"fragen":[]}';
+var KI_VOICE_SYSTEM_PROMPT = 'Du bist ein KI-Assistent für PV-Anlage und Wallbox Abnahmeprotokolle (DIN EN 62446 / DIN VDE 0100-722). Der Techniker spricht mit dir auf Deutsch.\n\nDeine Aufgaben:\n1. AUFTRAGGEBER/KUNDE: Wenn der Techniker Namen, Adressen, Telefon oder E-Mail nennt, extrahiere sie. Wenn Infos fehlen, frage gezielt nach.\n2. AUFMASS/MATERIALIEN UND BESTÜCKUNGSLISTE: Wenn "Aufmaß" oder Materialien/Bestückungsliste genannt werden (z.B. "10 Stück DC-Kabel 6mm²", "2 Wechselrichter SMA", "3 Rollen Kabel", usw.), trage sie in die entsprechenden Felder ein. Für die Stückliste (material): erkenne Menge + Einheit (Stk/m/Set/Pkg/Rolle/kg) + Bezeichnung. Für Geräte-Komponenten: trage Hersteller, Typ, Anzahl, SN usw. in die entsprechenden Komponentenfelder ein.\n3. MESSWERTE: Für Messwerte (Leerlaufspannung, Kurzschlussstrom, Isolationswiderstand usw.) frage IMMER nach dem genauen Wert. Nie einen Wert erfinden.\n4. UNBEKANNTE INFOS: Bei fehlenden Kunden-/Auftraggeberdaten, stelle gezielte Rückfragen.\n\nAntworte NUR mit diesem JSON (kein Text davor/danach):\n{"antwort":"Deine Antwort auf Deutsch","felder":{"auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"","sn":""},"geraete":"","netzbetreiber":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":""},"material":[{"menge":"","einheit":"Stk","bez":""}]},"fragen":[]}';
 
 function appendKiChat(role, text) {
   var box = document.getElementById('kiChatBox');
@@ -1575,7 +1575,7 @@ function toggleVoice() {
   }
   var box = document.getElementById('kiChatBox');
   if (box) box.style.display = 'block';
-  appendKiChat('assistant', 'Ich höre zu… Sprechen Sie z.B. Kundendaten, "Aufmaß" oder Materiallisten. Ich frage bei Messwerten immer nach.');
+  appendKiChat('assistant', 'Ich höre zu… Beispiele:\n• "Auftraggeber: Mustermann GmbH, Musterstraße 5, 80331 München"\n• "Aufmaß: 12 Module Solarwatt 400W, 2 Wechselrichter SMA 5000"\n• "Stückliste: 50 Meter DC-Kabel 6mm², 10 Stück MC4-Stecker, 3 Rollen Kabelkanal"\n• "Speicher BYD 10kWh, Seriennummer AB12345"\nBei Messwerten frage ich immer nach dem genauen Wert.');
 }
 
 async function runKiVoice(transcript) {
@@ -1613,6 +1613,19 @@ async function runKiVoice(transcript) {
       if (nz(f.geraete)) { hasData = true; fillProtFromAI({geraete: f.geraete}); }
       if (nz(f.netzbetreiber)) { hasData = true; fillProtFromAI({netzbetreiber: f.netzbetreiber}); }
       if (f.wallbox && (nz(f.wallbox.hersteller) || nz(f.wallbox.typ) || nz(f.wallbox.kw))) { hasData = true; fillProtFromAI({wallbox: f.wallbox}); }
+      // Stückliste / Bestückungsliste eintragen
+      if (f.material && f.material.length) {
+        var validMat = f.material.filter(function(mat) { return mat && nz(mat.bez); });
+        if (validMat.length) {
+          hasData = true;
+          validMat.forEach(function(mat) {
+            var einheitMap = {'Stk':'Stk','m':'m','Set':'Set','Pkg':'Pkg','Rolle':'Rolle','kg':'kg','stück':'Stk','meter':'m','rolle':'Rolle'};
+            var einheit = einheitMap[mat.einheit] || einheitMap[(mat.einheit||'').toLowerCase()] || 'Stk';
+            addMatRow({menge: mat.menge || '', einheit: einheit, bez: mat.bez.trim()});
+          });
+          appendKiChat('assistant', '📋 ' + validMat.length + ' Material-Position(en) zur Stückliste hinzugefügt.');
+        }
+      }
       if (hasData && statusEl) statusEl.textContent = '✅ Felder wurden eingetragen';
       else if (statusEl) statusEl.textContent = '';
     } else if (statusEl) statusEl.textContent = '';
@@ -1635,17 +1648,73 @@ function handleKiCameraPhoto(files) {
   var reader = new FileReader();
   reader.onload = function(ev) {
     var base64 = ev.target.result.split(',')[1];
-    kiUploadedFiles.push({name: file.name, base64: base64, mimeType: file.type});
+    var fileObj = {name: file.name, base64: base64, mimeType: file.type};
+    kiUploadedFiles.push(fileObj);
     renderKiFileThumbs();
-    if (statusEl) statusEl.textContent = '📸 Foto bereit — jetzt "KI ausfüllen" tippen';
-    appendKiChat('assistant', '📸 Foto hinzugefügt: ' + file.name + '. Tippen Sie auf "KI ausfüllen" um es zu analysieren.');
     var box = document.getElementById('kiChatBox');
     if (box) box.style.display = 'block';
+    appendKiChat('user', '📸 Foto aufgenommen: ' + file.name);
+    // Sofortanalyse starten
+    runKiPhotoChat(fileObj);
   };
   reader.onerror = function() { alert('Foto konnte nicht geladen werden.'); };
   reader.readAsDataURL(file);
-  // Reset damit dasselbe Foto erneut gewählt werden kann
   document.getElementById('kiCameraInput').value = '';
+}
+
+async function runKiPhotoChat(fileObj) {
+  var statusEl = document.getElementById('kiUploadStatus');
+  if (statusEl) statusEl.textContent = '🔍 Claude analysiert Foto…';
+  appendKiChat('assistant', '🔍 Analysiere Foto…');
+  try {
+    var photoPrompt = 'Analysiere dieses Foto für ein PV-Anlage oder Wallbox Abnahmeprotokoll.\n\nSchau genau hin und erkenne:\n- Was ist zu sehen? (Typenschild, Seriennummer-Aufkleber, Gerät, Anschlussplan?)\n- Zu welchem Gerät gehört es? (Speicher/Batterie, Wechselrichter, PV-Modul, Wallbox, Zähler, Kabelkanal?)\n- Welche Daten sind lesbar? (Seriennummer, Hersteller, Typ, Leistung kWp/kW/kWh, Spannung, Strom?)\n- Was ist nicht erkennbar oder mehrdeutig?\n\nWichtig: Wenn du eine Seriennummer siehst aber nicht sicher bist zu welchem Gerät sie gehört, frage in "fragen" explizit nach!\nWenn ein Wert nicht klar lesbar ist, schreib ihn NICHT in felder, sondern frage in "fragen" nach.\n\nAntworte NUR mit diesem JSON (kein Text davor/danach):\n{"antwort":"Beschreibe was du erkannt hast auf Deutsch und was eingetragen wurde","felder":{"auftraggeber":{"name":"","str":"","plz":"","tel":"","mail":""},"kunde":{"name":"","str":"","plz":"","tel":"","mail":""},"baustelle":"","module":{"hersteller":"","typ":"","wp":"","anzahl":"","isc":"","uoc":"","impp":"","umpp":""},"wechselrichter":[{"hersteller":"","typ":"","leistung":"","anzahl":"1","sn":""}],"speicher":{"hersteller":"","typ":"","kwh":"","anz":"","sn":""},"geraete":"","netzbetreiber":"","wallbox":{"hersteller":"","typ":"","sn":"","kw":"","phasen":""},"material":[]},"fragen":[]}';
+    var content = [
+      {type: 'image', source: {type: 'base64', media_type: fileObj.mimeType, data: fileObj.base64}},
+      {type: 'text', text: photoPrompt}
+    ];
+    var resp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model: 'claude-haiku-4-5', max_tokens: 1024, messages: [{role: 'user', content: content}]})
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var txt = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text.trim() : '';
+    var m = txt.match(/\{[\s\S]*\}/);
+    if (!m) { appendKiChat('assistant', txt || '❓ Foto konnte nicht ausgewertet werden.'); if (statusEl) statusEl.textContent = ''; return; }
+    var ai = JSON.parse(m[0]);
+    if (ai.antwort) appendKiChat('assistant', ai.antwort);
+    // Felder befüllen
+    if (ai.felder) {
+      var f = ai.felder;
+      var nz = function(v) { return v && String(v).trim(); };
+      var hasData = false;
+      if (f.auftraggeber && nz(f.auftraggeber.name)) { hasData = true; fillProtFromAI({auftraggeber: f.auftraggeber}); }
+      if (f.kunde && nz(f.kunde.name)) { hasData = true; fillProtFromAI({kunde: f.kunde}); }
+      if (nz(f.baustelle)) { hasData = true; fillProtFromAI({baustelle: f.baustelle}); }
+      if (f.module && (nz(f.module.hersteller) || nz(f.module.typ) || nz(f.module.wp) || nz(f.module.isc))) { hasData = true; fillProtFromAI({module: f.module}); }
+      if (f.wechselrichter && f.wechselrichter.length && (nz(f.wechselrichter[0].hersteller) || nz(f.wechselrichter[0].typ) || nz(f.wechselrichter[0].sn))) { hasData = true; fillProtFromAI({wechselrichter: f.wechselrichter}); }
+      if (f.speicher && (nz(f.speicher.hersteller) || nz(f.speicher.typ) || nz(f.speicher.sn) || nz(f.speicher.kwh))) { hasData = true; fillProtFromAI({speicher: f.speicher}); }
+      if (nz(f.geraete)) { hasData = true; fillProtFromAI({geraete: f.geraete}); }
+      if (nz(f.netzbetreiber)) { hasData = true; fillProtFromAI({netzbetreiber: f.netzbetreiber}); }
+      if (f.wallbox && (nz(f.wallbox.hersteller) || nz(f.wallbox.typ) || nz(f.wallbox.sn) || nz(f.wallbox.kw))) { hasData = true; fillProtFromAI({wallbox: f.wallbox}); }
+      if (f.material && f.material.length) {
+        f.material.filter(function(mat) { return mat && nz(mat.bez); }).forEach(function(mat) {
+          hasData = true;
+          addMatRow({menge: mat.menge || '', einheit: mat.einheit || 'Stk', bez: mat.bez.trim()});
+        });
+      }
+      if (statusEl) statusEl.textContent = hasData ? '✅ Foto ausgewertet — Felder eingetragen' : '📷 Foto gespeichert (keine Felder erkannt)';
+    } else if (statusEl) statusEl.textContent = '';
+    // Rückfragen anzeigen
+    if (ai.fragen && ai.fragen.length) {
+      ai.fragen.forEach(function(q) { if (q && q.trim()) appendKiChat('assistant', '❓ ' + q); });
+    }
+  } catch(e) {
+    console.error('Foto-Analyse Fehler:', e);
+    appendKiChat('assistant', '❌ Foto-Analyse fehlgeschlagen: ' + e.message + '\n→ Tippen Sie auf "KI ausfüllen" für erneuten Versuch.');
+    if (statusEl) statusEl.textContent = '❌ ' + e.message;
+  }
 }
 
 // ============ GALERIE ============
