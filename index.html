@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#111">
-<title>Arbeitszeit App v5</title>
+<title>Arbeitszeit &amp; Baustellen App v15</title>
 <link rel="manifest" href="manifest.json">
-<style>
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=73Jt-9pfCMSqD8SfP6BTIooX7tEM3l54JuX5bgGNXo2DTk_bpGvKPwEnLhoDPSgFr-78q-SqrKOcmT2adO2R91LOsm0tKFeqXmUOw9tly2xzz54MtA8Y8-qL7q1goSvlpktKZxse8gnx3KlQu9SWr0aVbyG8QnEM4dPDrM7TzCZCRGnp_9BhIAfpV5JxahgQkSgckgemm1cdAanuprSZMGQBJxYu_v2duiMBWVzdR88xs0hOQuKhljyaLwoJE3IfceRzOrVif6Mpq6hTqvUtaY3GMdEo9f5yoYg6kScW3N2wjdfdA4_mvNg1PUWDr7aSc242NomxFSBTL9dY9qnGFA" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jaGF0Z3B0LmNvbS9iYWNrZW5kLWFwaS9lc3R1YXJ5L2NvbnRlbnQ_aWQ9ZmlsZV8wMDAwMDAwMDU0NWM4MjQ2YmZlNjRlZGM3N2M4Y2FiMCZmbj1hcmJlaXRzemVpdF9hcHBfdjE1X3ZlcmJlc3NlcnQuaHRtbCZjZD1hdHRhY2htZW50JnRzPTQ5NjUwOSZwPWZzJmNpZD0xJnNpZz03ZGUwNzI3YmVhZDc1NDY4Yzc4NTEwMjJhN2I1ZGRhNzRjNGM5YzZkODlhNzc1ZDBkMjQ0NjkyMmI0OGQzNzI1JnY9MA"/><style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
 body{background:#f5f5f5;color:#111;max-width:420px;margin:0 auto;min-height:100vh}
 .nav{display:flex;background:#fff;border-bottom:1px solid #e5e5e5;position:sticky;top:0;z-index:10}
@@ -26,8 +26,8 @@ body{background:#f5f5f5;color:#111;max-width:420px;margin:0 auto;min-height:100v
 .btn.pri{background:#111;color:#fff;border-color:#111}.btn.pri:hover{background:#333}
 .btn.dan{border-color:#fca5a5;color:#dc2626}.btn.dan:hover{background:#fef2f2}
 .btn.suc{border-color:#86efac;color:#16a34a}.btn.suc:hover{background:#f0fdf4}
-.btn.inf{border-color:#93c5fd;color:#2563eb}.btn.inf:hover{background:#eff6ff}h
-  .btn.warn{border-color:#fde68a;color:#d97706}.btn.warn:hover{background:#fffbeb}
+.btn.inf{border-color:#93c5fd;color:#2563eb}.btn.inf:hover{background:#eff6ff}
+.btn.warn{border-color:#fde68a;color:#d97706}.btn.warn:hover{background:#fffbeb}
 .lbl{font-size:12px;color:#666;display:block;margin:9px 0 3px}
 input,select,textarea{width:100%;font-size:13px;border-radius:8px;border:1px solid #d4d4d4;padding:7px 10px;background:#fff;color:#111;outline:none}
 input:focus,select:focus,textarea:focus{border-color:#111}
@@ -100,6 +100,36 @@ textarea{resize:vertical;min-height:52px}
 .sync-status{font-size:11px;color:#888;margin-top:4px;text-align:center}
 .barcode-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:1200;padding:18px;align-items:center;justify-content:center}
 .barcode-modal.open{display:flex}.barcode-box{background:#fff;border-radius:14px;padding:14px;width:100%;max-width:390px}.barcode-video{width:100%;border-radius:10px;background:#111;max-height:55vh}.scan-row{display:flex;gap:6px;align-items:end}.scan-row input{flex:1}.scan-btn{flex:0;padding:7px 10px;white-space:nowrap}
+
+
+/* ===== v15 UI/UX: Baustellen-zentriert, mobil optimiert ===== */
+:root{--app-max:680px;--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--surface:#fff;--bg:#f3f4f6;--blue:#2563eb}
+html{background:var(--bg)}
+body{max-width:var(--app-max);background:var(--bg);color:var(--ink);padding-bottom:78px}
+#mainApp{min-height:100vh}
+.nav{position:fixed;top:auto;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:var(--app-max);z-index:1000;border-top:1px solid var(--line);border-bottom:0;box-shadow:0 -8px 24px rgba(15,23,42,.08);padding-bottom:max(4px,env(safe-area-inset-bottom));background:rgba(255,255,255,.97);backdrop-filter:blur(14px)}
+.nb{min-height:58px;padding:7px 4px 5px;font-size:10.5px;border-bottom:0;border-top:3px solid transparent;color:#6b7280;gap:1px}
+.nb.active{border-bottom:0;border-top-color:#111827;color:#111827;background:#f9fafb}
+.tab{padding:14px 14px 102px}
+.card,.bau-card{border-color:var(--line);box-shadow:0 1px 2px rgba(15,23,42,.03)}
+.btn{min-height:38px}
+input,select,textarea{min-height:38px;font-size:14px}
+input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.10)}
+.app-topbar{position:sticky;top:0;z-index:30;background:rgba(243,244,246,.94);backdrop-filter:blur(12px);padding:10px 14px 8px;border-bottom:1px solid rgba(229,231,235,.9);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.app-brand{font-size:15px;font-weight:800;letter-spacing:-.2px}.app-sub{font-size:10px;color:#6b7280;margin-top:1px}
+.project-picker{border:1px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#fff);}
+.project-picker .project-title{font-size:12px;font-weight:700;color:#1e40af;margin-bottom:5px}
+.project-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.project-stat{background:#f9fafb;border:1px solid #eef2f7;border-radius:10px;padding:10px;text-align:center}.project-stat b{display:block;font-size:20px}.project-stat span{font-size:10px;color:#6b7280}
+.project-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:13px;margin-bottom:10px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+.project-card-head{display:flex;gap:10px;align-items:flex-start}.project-icon{width:40px;height:40px;border-radius:11px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+.project-name{font-size:14px;font-weight:750;line-height:1.25}.project-meta{font-size:11px;color:#6b7280;margin-top:3px;line-height:1.4}.project-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}.project-actions .btn{font-size:11px;padding:7px 4px;min-height:34px}
+.quick-menu{display:grid;grid-template-columns:1fr 1fr;gap:9px}.quick-menu .menu-card{border:1px solid #e5e7eb;background:#fff;border-radius:12px;padding:13px;text-align:left;cursor:pointer}.quick-menu .menu-card:active{transform:scale(.99)}.menu-ico{font-size:22px}.menu-title{font-size:13px;font-weight:700;margin-top:6px}.menu-sub{font-size:10px;color:#6b7280;margin-top:2px}
+.empty-state{text-align:center;color:#6b7280;padding:28px 12px}.empty-state .ico{font-size:36px;margin-bottom:8px}.empty-state b{display:block;color:#374151;font-size:14px;margin-bottom:4px}
+.search-wrap{position:relative;margin-bottom:10px}.search-wrap input{padding-left:34px}.search-wrap:before{content:'⌕';position:absolute;left:11px;top:7px;color:#9ca3af;font-size:19px;z-index:1}
+@media (min-width:560px){.tab{padding-left:18px;padding-right:18px}.project-list-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.project-card{margin-bottom:0}.quick-menu{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:370px){.nb{font-size:9.5px}.project-actions{grid-template-columns:1fr}.r2{grid-template-columns:1fr}.tdis{font-size:34px}}
+
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -132,8 +162,8 @@ textarea{resize:vertical;min-height:52px}
 <div id="loginScreen">
   <div class="login-card">
     <div style="font-size:40px;margin-bottom:12px">⏱</div>
-    <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit App</div>
-    <div style="font-size:13px;color:#888;margin-bottom:20px">v14 · Fix: Speicher-Rückmeldung bei Zeiterfassung + Timer-Inkonsistenz bei Schnell-Speichern</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:4px">Arbeitszeit &amp; Baustellen</div>
+    <div style="font-size:13px;color:#888;margin-bottom:20px">Zeiterfassung · Baudokumentation · Prüfprotokolle</div>
     <div id="userStep">
       <div id="userList"></div>
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0">
@@ -153,19 +183,21 @@ textarea{resize:vertical;min-height:52px}
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 14 · Live Cloud-Status-Anzeige (Heute-Tab, oben)</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 15</div>
 </div>
 
 <!-- MAIN APP -->
 <div id="mainApp" style="display:none">
+  <div class="app-topbar">
+    <div><div class="app-brand">⚡ Arbeitszeit &amp; Baustellen</div><div class="app-sub">Zeiten · Fotos · Prüfung · Abnahme</div></div>
+    <button class="btn" style="flex:0;padding:5px 9px;min-height:32px;font-size:11px" onclick="gotoTab('baustellen')">🏗 Projekte</button>
+  </div>
   <div class="nav">
-    <button class="nb active" onclick="gotoTab('heute')">⏱<br>Heute</button>
-    <button class="nb" onclick="gotoTab('eintrag')">➕<br>Eintrag</button>
-    <button class="nb" onclick="gotoTab('fotos')">📸<br>Fotos</button>
-    <button class="nb" onclick="gotoTab('monat')">📅<br>Monat</button>
-    <button class="nb" onclick="gotoTab('protokoll')">📋<br>Protokoll</button>
-    <button class="nb agOnly" onclick="gotoTab('ag')" style="display:none">🏢<br>Arbeitgeber</button>
-    <button class="nb" onclick="gotoTab('profil')">👤<br>Profil</button>
+    <button class="nb active" data-tab="heute" onclick="gotoTab('heute')">⏱<br>Heute</button>
+    <button class="nb" data-tab="baustellen" onclick="gotoTab('baustellen')">🏗<br>Baustellen</button>
+    <button class="nb" data-tab="fotos" onclick="gotoTab('fotos')">📸<br>Fotos</button>
+    <button class="nb" data-tab="protokoll" onclick="gotoTab('protokoll')">📋<br>Protokoll</button>
+    <button class="nb" data-tab="mehr" onclick="gotoTab('mehr')">•••<br>Mehr</button>
   </div>
 
   <!-- HEUTE -->
@@ -175,6 +207,15 @@ textarea{resize:vertical;min-height:52px}
     </div>
     <div id="cloudStatusBar" onclick="showCloudDetail()" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:11px;color:#888;background:#f5f5f5;padding:6px 10px;border-radius:8px;margin-bottom:10px">
       <span id="cloudDot">⚪</span><span id="cloudStatusText">Cloud-Status wird geprüft…</span>
+    </div>
+    <div class="card project-picker">
+      <div class="project-title">🏗 Aktuelle Baustelle / Projekt</div>
+      <input type="text" id="todayProject" list="dlGlobalBaustellen" placeholder="z.B. Musterstr. 5" oninput="saveCurrentProject()">
+      <datalist id="dlGlobalBaustellen"></datalist>
+      <div class="brow" style="margin-top:8px;margin-bottom:0">
+        <button class="btn" onclick="gotoTab('baustellen')">Alle Baustellen</button>
+        <button class="btn inf" onclick="quickProjectAction('foto')">📷 Foto</button>
+      </div>
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -229,6 +270,33 @@ textarea{resize:vertical;min-height:52px}
     </div>
   </div>
 
+  <!-- BAUSTELLEN / PROJEKTE -->
+  <div class="tab" id="tab-baustellen">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
+      <div><div style="font-size:19px;font-weight:800">Baustellen</div><div style="font-size:11px;color:#6b7280">Alles zu einem Projekt an einer Stelle</div></div>
+      <button class="btn pri" style="flex:0;padding:8px 11px" onclick="createProject()">+ Neu</button>
+    </div>
+    <div class="project-grid">
+      <div class="project-stat"><b id="projectCount">0</b><span>Projekte</span></div>
+      <div class="project-stat"><b id="projectFotoCount">0</b><span>Fotos</span></div>
+      <div class="project-stat"><b id="projectProtCount">0</b><span>Protokolle</span></div>
+    </div>
+    <div class="search-wrap"><input type="search" id="projectSearch" placeholder="Baustelle, Adresse oder Kunde suchen …" oninput="renderProjectDashboard()"></div>
+    <div id="projectList" class="project-list-two"></div>
+  </div>
+
+  <!-- MEHR -->
+  <div class="tab" id="tab-mehr">
+    <div style="font-size:19px;font-weight:800;margin-bottom:3px">Mehr</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:12px">Weitere Bereiche und Verwaltung</div>
+    <div class="quick-menu">
+      <button class="menu-card" onclick="gotoTab('eintrag')"><div class="menu-ico">➕</div><div class="menu-title">Zeiteintrag</div><div class="menu-sub">Zeit manuell erfassen</div></button>
+      <button class="menu-card" onclick="gotoTab('monat')"><div class="menu-ico">📅</div><div class="menu-title">Monat</div><div class="menu-sub">Stunden &amp; Export</div></button>
+      <button class="menu-card" onclick="gotoTab('profil')"><div class="menu-ico">👤</div><div class="menu-title">Profil</div><div class="menu-sub">Urlaub &amp; Daten</div></button>
+      <button class="menu-card agOnly" style="display:none" onclick="gotoTab('ag')"><div class="menu-ico">🏢</div><div class="menu-title">Arbeitgeber</div><div class="menu-sub">Mitarbeiter &amp; Firma</div></button>
+    </div>
+  </div>
+
   <!-- EINTRAG -->
   <div class="tab" id="tab-eintrag">
     <div class="card">
@@ -264,7 +332,7 @@ textarea{resize:vertical;min-height:52px}
         </div>
       </div>
       <span class="lbl">Einsatzort / Baustelle</span>
-      <input type="text" id="eingOrt" placeholder="z.B. Baustelle Musterstr. 5">
+      <input type="text" id="eingOrt" list="dlGlobalBaustellen" placeholder="z.B. Baustelle Musterstr. 5">
       <span class="lbl">Notiz</span>
       <textarea id="eingNotiz" placeholder="Optional..."></textarea>
       <div class="brow" style="margin-top:12px">
@@ -283,7 +351,7 @@ textarea{resize:vertical;min-height:52px}
         <span class="lbl">Mitarbeiter</span><select id="fotoMA"></select>
       </div>
       <span class="lbl">Baustelle / Ort</span>
-      <input type="text" id="fotoBaustelle" placeholder="z.B. Baustelle Musterstr. 5">
+      <input type="text" id="fotoBaustelle" list="dlGlobalBaustellen" placeholder="z.B. Baustelle Musterstr. 5">
       <span class="lbl">Notiz zum Foto</span>
       <input type="text" id="fotoNotiz" placeholder="z.B. Dach fertig...">
       
@@ -1119,7 +1187,7 @@ function initApp(){
     updateUrlaubKonto();
     getGPS();
   }
-  gotoTab('heute');renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
+  initProjectUI();gotoTab('heute');renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
 
   var ub=document.getElementById('uploadBox');
   ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
@@ -1140,15 +1208,92 @@ function getGPS(){
 
 // ============ TABS ============
 function gotoTab(id){
-  ['heute','eintrag','fotos','monat','protokoll','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
+  ['heute','baustellen','mehr','eintrag','fotos','monat','protokoll','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('active');});
   var tel=document.getElementById('tab-'+id);if(tel)tel.classList.add('active');
-  document.querySelectorAll('.nb').forEach(function(b){if(b.textContent.indexOf({heute:'Heute',eintrag:'Eintrag',fotos:'Fotos',monat:'Monat',protokoll:'Protokoll',ag:'Arbeitgeber',profil:'Profil'}[id]||'')>=0)b.classList.add('active');});
+  var navId=(id==='eintrag'||id==='monat'||id==='ag'||id==='profil')?'mehr':id;
+  var nb=document.querySelector('.nb[data-tab="'+navId+'"]');if(nb)nb.classList.add('active');
   if(id==='monat')renderMonth();
   if(id==='protokoll'){renderProtokollListe();fillDatalists();}
   if(id==='fotos')renderGalerie();
   if(id==='profil')updateUrlaubKonto();
+  if(id==='baustellen')renderProjectDashboard();
+  window.scrollTo(0,0);
 }
+
+// ============ BAUSTELLEN / PROJEKTE ============
+function projectKey(v){return String(v||'').trim().toLowerCase();}
+function htmlEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function getProjectRecords(){
+  var m={};
+  function add(name,address){name=String(name||'').trim();if(!name)return;var k=projectKey(name);if(!m[k])m[k]={name:name,address:address||''};else if(address&&!m[k].address)m[k].address=address;}
+  baustellen.forEach(function(b){add(b&&b.name,b&&b.adresse);});
+  entries.forEach(function(e){add(e&&e.ort,'');});
+  fotos.forEach(function(f){add(f&&f.baustelle,'');});
+  protokolle.forEach(function(p){add(p&&p.baustelle,(p&&p.anlage&&p.anlage.standort)||'');});
+  return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return a.name.localeCompare(b.name,'de');});
+}
+function rememberProject(name,address){
+  name=String(name||'').trim();if(!name)return;
+  var k=projectKey(name),found=baustellen.some(function(b){return projectKey(b&&b.name)===k;});
+  if(!found)baustellen.push({name:name,adresse:String(address||'').trim(),dat:todayStr()});
+}
+function renderGlobalProjectDatalist(){
+  var dl=document.getElementById('dlGlobalBaustellen');if(!dl)return;
+  dl.innerHTML=getProjectRecords().map(function(p){return '<option value="'+htmlEsc(p.name)+'">'+htmlEsc(p.address||'')+'</option>';}).join('');
+}
+function saveCurrentProject(){
+  var el=document.getElementById('todayProject');if(!el)return;
+  try{localStorage.setItem('az_current_project',el.value.trim());}catch(e){}
+}
+function currentProject(){var el=document.getElementById('todayProject');return el?el.value.trim():'';}
+function initProjectUI(){
+  renderGlobalProjectDatalist();
+  var el=document.getElementById('todayProject');if(el){try{el.value=localStorage.getItem('az_current_project')||'';}catch(e){}}
+}
+function createProject(){
+  var name=prompt('Name der Baustelle / des Projekts:');if(!name||!name.trim())return;
+  name=name.trim();var address=prompt('Adresse (optional):')||'';
+  var exists=getProjectRecords().some(function(p){return projectKey(p.name)===projectKey(name);});
+  if(!exists){baustellen.push({name:name,adresse:address.trim(),dat:todayStr()});saveData();}
+  var t=document.getElementById('todayProject');if(t)t.value=name;saveCurrentProject();renderGlobalProjectDatalist();renderProjectDashboard();
+}
+function projectStats(name){
+  var k=projectKey(name);
+  var pe=entries.filter(function(e){return projectKey(e&&e.ort)===k;});
+  var pf=fotos.filter(function(f){return projectKey(f&&f.baustelle)===k;});
+  var pp=protokolle.filter(function(p){return projectKey(p&&p.baustelle)===k;});
+  var h=pe.reduce(function(a,e){return a+(Number(e.h)||0);},0);
+  var dates=[];pe.forEach(function(e){if(e.dat)dates.push(e.dat);});pf.forEach(function(f){if(f.datum)dates.push(f.datum);});pp.forEach(function(p){if(p.datum)dates.push(p.datum);});
+  dates.sort();return {hours:h,fotos:pf.length,prots:pp.length,last:dates.length?dates[dates.length-1]:''};
+}
+function renderProjectDashboard(){
+  renderGlobalProjectDatalist();
+  var all=getProjectRecords();
+  var q=((document.getElementById('projectSearch')||{}).value||'').trim().toLowerCase();
+  var list=q?all.filter(function(p){return (p.name+' '+(p.address||'')).toLowerCase().indexOf(q)>=0;}):all;
+  var c=document.getElementById('projectCount'),fc=document.getElementById('projectFotoCount'),pc=document.getElementById('projectProtCount');
+  if(c)c.textContent=all.length;if(fc)fc.textContent=fotos.length;if(pc)pc.textContent=protokolle.length;
+  var el=document.getElementById('projectList');if(!el)return;
+  if(!list.length){el.innerHTML='<div class="card empty-state"><div class="ico">🏗</div><b>Noch keine Baustelle</b><div>Lege ein Projekt an oder erfasse einen Einsatzort bei Zeit, Foto oder Protokoll.</div><button class="btn pri" style="margin-top:12px" onclick="createProject()">+ Erste Baustelle anlegen</button></div>';return;}
+  el.innerHTML=list.map(function(p){var st=projectStats(p.name),enc=encodeURIComponent(p.name);return '<div class="project-card">'
+    +'<div class="project-card-head"><div class="project-icon">🏗</div><div style="min-width:0;flex:1"><div class="project-name">'+htmlEsc(p.name)+'</div><div class="project-meta">'+(p.address?'📍 '+htmlEsc(p.address)+'<br>':'')+(st.last?'Zuletzt: '+htmlEsc(st.last)+' · ':'')+st.hours.toFixed(1).replace('.',',')+' h · '+st.fotos+' Fotos · '+st.prots+' Protokoll(e)</div></div></div>'
+    +'<div class="project-actions"><button class="btn" onclick="openProjectAction(\'entry\',decodeURIComponent(\''+enc+'\'))">⏱ Zeit</button><button class="btn inf" onclick="openProjectAction(\'foto\',decodeURIComponent(\''+enc+'\'))">📷 Foto</button><button class="btn suc" onclick="openProjectAction(\'prot\',decodeURIComponent(\''+enc+'\'))">📋 Protokoll</button></div></div>';}).join('');
+}
+function setCurrentProjectValue(name){
+  var t=document.getElementById('todayProject');if(t)t.value=name;saveCurrentProject();
+}
+function openProjectAction(action,name){
+  setCurrentProjectValue(name);
+  if(action==='entry'){gotoTab('eintrag');document.getElementById('eingOrt').value=name;}
+  else if(action==='foto'){gotoTab('fotos');document.getElementById('fotoBaustelle').value=name;}
+  else if(action==='prot'){gotoTab('protokoll');newProtokoll();document.getElementById('pBaustelle').value=name;protFotoCount();}
+}
+function quickProjectAction(action){
+  var name=currentProject();if(!name){alert('Bitte zuerst eine aktuelle Baustelle auswählen.');return;}
+  openProjectAction(action,name);
+}
+
 
 // ============ TIMER ============
 function getSoll(){if(isAG())return 7;var ma=employees[activeMaIdx()];return ma?ma.soll:7;}
@@ -1233,7 +1378,7 @@ function addPause(m){
   if(timers[key]){timers[key].pauseMins=pauseMins;saveData();}
   alert(m+' Min Pause. Gesamt: '+pauseMins+' Min.');
 }
-function saveQuick(){if(timerSec===0){alert('Kein aktiver Timer.');return;}var net=Math.max(0,(timerSec-pauseMins*60)/3600);var maIdx=isAG()?0:activeMaIdx();stopTimer(true);entries.unshift({ma:maIdx,dat:todayStr(),typ:'arbeit',start:'--',end:'--',pause:pauseMins,ort:'',notiz:'',h:parseFloat(net.toFixed(2))});timerSec=0;pauseMins=0;document.getElementById('timerDisp').textContent='00:00:00';document.getElementById('timerSub').textContent='Nicht gestartet';document.getElementById('todayNet').textContent='0,00 h';document.getElementById('todayOver').textContent='+0,00 h';document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';renderRecent();var cloudSave=saveData();cloudSave.then(function(ok){alert(ok?'Gespeichert und mit Cloud synchronisiert!':'Lokal gespeichert. Cloud-Sync folgt automatisch, sobald die Verbindung steht.');}).catch(function(){alert('Lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});}
+function saveQuick(){if(timerSec===0){alert('Kein aktiver Timer.');return;}var net=Math.max(0,(timerSec-pauseMins*60)/3600);var maIdx=isAG()?0:activeMaIdx();var savedPause=pauseMins;var ort=currentProject();if(ort)rememberProject(ort);stopTimer(true);entries.unshift({ma:maIdx,dat:todayStr(),typ:'arbeit',start:'--',end:'--',pause:savedPause,ort:ort,notiz:'',h:parseFloat(net.toFixed(2))});timerSec=0;pauseMins=0;document.getElementById('timerDisp').textContent='00:00:00';document.getElementById('timerSub').textContent='Nicht gestartet';document.getElementById('todayNet').textContent='0,00 h';document.getElementById('todayOver').textContent='+0,00 h';document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';renderRecent();renderGlobalProjectDatalist();var cloudSave=saveData();cloudSave.then(function(ok){alert(ok?'Gespeichert'+(ort?' · '+ort:'')+' und mit Cloud synchronisiert!':'Lokal gespeichert. Cloud-Sync folgt automatisch, sobald die Verbindung steht.');}).catch(function(){alert('Lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});}
 
 // ============ RECENT ============
 function renderRecent(){
@@ -1247,7 +1392,7 @@ function renderRecent(){
 function calcNetto(){var s=document.getElementById('eingStart').value;var e=document.getElementById('eingEnd').value;var p=parseInt(document.getElementById('eingPause').value)||0;if(!s||!e){document.getElementById('nettoCalc').textContent='—';return;}var sm=parseInt(s.split(':')[0])*60+parseInt(s.split(':')[1]);var em=parseInt(e.split(':')[0])*60+parseInt(e.split(':')[1]);document.getElementById('nettoCalc').textContent=Math.max(0,(em-sm-p)/60).toFixed(2).replace('.',',')+' h';}
 function toggleTyp(){document.getElementById('zeitBlock').style.display=(document.getElementById('eingTyp').value==='arbeit'||document.getElementById('eingTyp').value==='schule')?'block':'none';}
 function renderMASelect(){var el=document.getElementById('eingMA');if(!el)return;el.innerHTML=employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
-function saveEntry(){var typ=document.getElementById('eingTyp').value;var s=document.getElementById('eingStart').value;var e=document.getElementById('eingEnd').value;var p=parseInt(document.getElementById('eingPause').value)||0;var net=0;if(typ==='arbeit'||typ==='schule'){if(!s||!e){alert('Bitte Start und Ende eingeben.');return;}var sm=parseInt(s.split(':')[0])*60+parseInt(s.split(':')[1]);var em=parseInt(e.split(':')[0])*60+parseInt(e.split(':')[1]);net=Math.max(0,(em-sm-p)/60);}var maIdx=isAG()?parseInt(document.getElementById('eingMA').value)||0:activeMaIdx();var obj={ma:maIdx,dat:document.getElementById('eingDat').value,typ:typ,start:s,end:e,pause:p,ort:document.getElementById('eingOrt').value,notiz:document.getElementById('eingNotiz').value,h:parseFloat(net.toFixed(2))};
+function saveEntry(){var typ=document.getElementById('eingTyp').value;var s=document.getElementById('eingStart').value;var e=document.getElementById('eingEnd').value;var p=parseInt(document.getElementById('eingPause').value)||0;var net=0;if(typ==='arbeit'||typ==='schule'){if(!s||!e){alert('Bitte Start und Ende eingeben.');return;}var sm=parseInt(s.split(':')[0])*60+parseInt(s.split(':')[1]);var em=parseInt(e.split(':')[0])*60+parseInt(e.split(':')[1]);net=Math.max(0,(em-sm-p)/60);}var maIdx=isAG()?parseInt(document.getElementById('eingMA').value)||0:activeMaIdx();rememberProject(document.getElementById('eingOrt').value);var obj={ma:maIdx,dat:document.getElementById('eingDat').value,typ:typ,start:s,end:e,pause:p,ort:document.getElementById('eingOrt').value,notiz:document.getElementById('eingNotiz').value,h:parseFloat(net.toFixed(2))};
 if(editingEntryIdx>=0&&entries[editingEntryIdx]){entries[editingEntryIdx]=obj;editingEntryIdx=-1;var eb=document.getElementById('entryEditBanner');if(eb)eb.style.display='none';renderRecent();renderMonth();var cs=saveData();cs.then(function(ok){alert(ok?'Eintrag aktualisiert und mit Cloud synchronisiert!':'Eintrag lokal aktualisiert. Cloud-Sync folgt automatisch.');}).catch(function(){alert('Eintrag lokal aktualisiert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});clearEntry();return;}
 else{entries.unshift(obj);}
 renderRecent();renderMonth();var cs2=saveData();cs2.then(function(ok){alert(ok?'Eintrag gespeichert und mit Cloud synchronisiert!':'Eintrag lokal gespeichert. Cloud-Sync folgt automatisch, sobald die Verbindung steht.');}).catch(function(){alert('Eintrag lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});clearEntry();}
@@ -1285,6 +1430,7 @@ function renderGalFilterSelect(){var sel=document.getElementById('galFilterMA');
 function handleFotos(files){
   if(!files||!files.length)return;
   var baustelle=document.getElementById('fotoBaustelle').value.trim()||'Baustelle';
+  rememberProject(baustelle);renderGlobalProjectDatalist();
   var notiz=document.getElementById('fotoNotiz').value.trim();
   var maIdx=isAG()?parseInt(document.getElementById('fotoMA').value)||0:activeMaIdx();
   var doGPS=document.getElementById('gpsCheck').checked;
@@ -2199,7 +2345,7 @@ function refreshAll(){
     var ap=document.getElementById('agPlz');
     if(ap && document.activeElement!==ap){ap.value=firma.plz||'';}
     var cp=document.getElementById('currentPinDisplay');if(cp)cp.textContent=APP_PIN;
-    renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
+    renderRecent();renderMonth();renderGalerie();renderGlobalProjectDatalist();restoreTimerIfRunning();
     if(document.getElementById('protListView')&&document.getElementById('protListView').style.display!=='none')renderProtokollListe();
     if(isAG()){renderMAListe();renderAgFilterSelect();}
     else{updateUrlaubKonto();}
@@ -3056,6 +3202,7 @@ function saveProtokoll(silent){
   var p=buildProtFromForm();
   p.id=(editingProtIdx>=0&&protokolle[editingProtIdx]&&protokolle[editingProtIdx].id)?protokolle[editingProtIdx].id:Date.now();
   if(!p.kunde.name&&!p.baustelle){alert('Bitte mindestens Kunde oder Baustelle angeben.');return;}
+  rememberProject(p.baustelle,(p.anlage&&p.anlage.standort)||'');renderGlobalProjectDatalist();
   if(editingProtIdx>=0&&protokolle[editingProtIdx])protokolle[editingProtIdx]=p;
   else{protokolle.unshift(p);editingProtIdx=0;}
   upsertKomponenten(p);
