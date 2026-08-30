@@ -163,7 +163,14 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
 .status-fertig{background:#dcfce7;color:#166534}
 .status-pruefung_bauleiter{background:#fef9c3;color:#854d0e}
 .status-bestaetigt_bauleiter{background:#dbeafe;color:#1e40af}
+.status-erneut_pruefung_bauleiter{background:#fee2e2;color:#991b1b}
 .bl-changed-banner{background:#fef3c7;color:#92400e;font-size:12px;padding:9px 11px;border-radius:8px;margin-bottom:10px}
+.qa-sheet{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1300}
+.qa-sheet.open{display:block}
+.qa-sheet-in{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:var(--app-max);background:#fff;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(15,23,42,.18);box-sizing:border-box}
+.qa-sheet-title{font-size:14px;font-weight:700;margin-bottom:12px}
+.qa-sheet-buttons{display:flex;flex-direction:column;gap:8px}
+.ab-sig-locked{pointer-events:none;opacity:.85}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -192,6 +199,14 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
   </div>
 </div>
 
+<!-- SCHNELLFUNKTION NACH ARBEITSENDE -->
+<div class="qa-sheet" id="qaSheet" onclick="if(event.target===this)closeQaSheet();">
+  <div class="qa-sheet-in">
+    <div class="qa-sheet-title" id="qaSheetTitle"></div>
+    <div class="qa-sheet-buttons" id="qaSheetButtons"></div>
+  </div>
+</div>
+
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
@@ -217,7 +232,7 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
       <div class="numpad" id="numpad"></div>
     </div>
   </div>
-  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 15</div>
+  <div id="verInfo" style="font-size:11px;color:#bbb;margin-top:14px">Version 17 · Phase 3 (Unterschriften/Bauleiter-Freigabe)</div>
 </div>
 
 <!-- MAIN APP -->
@@ -408,9 +423,11 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
                 <option value="fertig">Fertiggestellt</option>
                 <option value="pruefung_bauleiter" disabled>Zur Prüfung durch Bauleiter</option>
                 <option value="bestaetigt_bauleiter" disabled>Vom Bauleiter bestätigt</option>
+                <option value="erneut_pruefung_bauleiter" disabled>Zur erneuten Prüfung durch Bauleiter</option>
               </select>
             </div>
           </div>
+          <div id="abStatusActions" style="margin-top:8px"></div>
           <span class="lbl">Mitarbeiter (Mehrfachauswahl)</span>
           <div id="abMaChecks" style="display:flex;flex-wrap:wrap;gap:6px"></div>
           <div style="font-size:11px;color:#888;margin-top:6px" id="abErstelltVon"></div>
@@ -482,6 +499,74 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
           </div>
           <div id="abMatRows"></div>
           <datalist id="dlAbMaterial"></datalist>
+        </div>
+
+        <div class="card">
+          <div class="sec">Unterschrift Monteur / Mitarbeiter</div>
+          <div class="r2">
+            <div><span class="lbl">Name</span><input type="text" id="abSigMonteurName" onchange="queueBerichtDraft()"></div>
+            <div><span class="lbl">Funktion</span><input type="text" value="Monteur / Mitarbeiter" readonly style="background:#f5f5f5"></div>
+          </div>
+          <span class="lbl">Datum</span>
+          <input type="date" id="abSigMonteurDatum" onchange="queueBerichtDraft()">
+          <span class="lbl">Unterschrift</span>
+          <div class="sig-wrap"><canvas id="abSigMonteur" class="sig-pad"></canvas></div>
+          <div class="brow" style="margin-top:6px">
+            <button type="button" class="btn suc" id="abSigMonteurSignBtn" onclick="abSignRole('monteur')">✓ Unterschreiben</button>
+            <button type="button" class="btn dan" onclick="abClearSig('monteur')">✕ Löschen</button>
+            <button type="button" class="btn" id="abSigMonteurResignBtn" style="display:none" onclick="abResignRole('monteur')">✎ Neu unterschreiben</button>
+          </div>
+        </div>
+
+        <div class="card" style="border:2px solid #f59e0b;background:#fffbeb">
+          <div class="sec">Freigabe durch Bauleiter</div>
+          <div id="abBlValidBanner" style="display:none;background:#dcfce7;color:#166534;font-size:12px;padding:8px 10px;border-radius:8px;margin-bottom:8px"></div>
+          <div id="abBlInvalidBanner" style="display:none;background:#fef3c7;color:#92400e;font-size:12px;padding:8px 10px;border-radius:8px;margin-bottom:8px"></div>
+          <div class="r2">
+            <div><span class="lbl">Name Bauleiter</span><input type="text" id="abSigBauleiterName" onchange="queueBerichtDraft()"></div>
+            <div><span class="lbl">Funktion</span><input type="text" value="Bauleiter" readonly style="background:#f5f5f5"></div>
+          </div>
+          <span class="lbl">Datum</span>
+          <input type="date" id="abSigBauleiterDatum" onchange="queueBerichtDraft()">
+          <span class="lbl">Unterschrift</span>
+          <div class="sig-wrap"><canvas id="abSigBauleiter" class="sig-pad"></canvas></div>
+          <div class="brow" style="margin-top:6px">
+            <button type="button" class="btn suc" id="abSigBauleiterSignBtn" onclick="abSignRole('bauleiter')">✓ Unterschreiben</button>
+            <button type="button" class="btn dan" onclick="abClearSig('bauleiter')">✕ Löschen</button>
+            <button type="button" class="btn" id="abSigBauleiterResignBtn" style="display:none" onclick="abResignRole('bauleiter')">✎ Neu unterschreiben</button>
+          </div>
+          <span class="lbl">Bemerkung des Bauleiters (optional)</span>
+          <textarea id="abBlBemerkung" onchange="queueBerichtDraft()" placeholder="Optional…"></textarea>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:8px;cursor:pointer">
+            <input type="checkbox" id="abBlGeprueftArbeiten" style="width:auto" onchange="queueBerichtDraft()"><span>Ausgeführte Arbeiten geprüft</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:4px;cursor:pointer">
+            <input type="checkbox" id="abBlGeprueftDoku" style="width:auto" onchange="queueBerichtDraft()"><span>Baudokumentation geprüft</span>
+          </label>
+          <button type="button" class="btn pri" style="width:100%;margin-top:10px" onclick="confirmBauleiterBestaetigung()">✅ Bericht durch Bauleiter bestätigen</button>
+        </div>
+
+        <div class="card">
+          <div class="sec">Kunde / Auftraggeber (optional)</div>
+          <span class="lbl">Name</span>
+          <input type="text" id="abSigKundeName" onchange="queueBerichtDraft()">
+          <span class="lbl">Datum</span>
+          <input type="date" id="abSigKundeDatum" onchange="queueBerichtDraft()">
+          <span class="lbl">Unterschrift</span>
+          <div class="sig-wrap"><canvas id="abSigKunde" class="sig-pad"></canvas></div>
+          <div class="brow" style="margin-top:6px">
+            <button type="button" class="btn suc" id="abSigKundeSignBtn" onclick="abSignRole('kunde')">✓ Unterschreiben</button>
+            <button type="button" class="btn dan" onclick="abClearSig('kunde')">✕ Löschen</button>
+            <button type="button" class="btn" id="abSigKundeResignBtn" style="display:none" onclick="abResignRole('kunde')">✎ Neu unterschreiben</button>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:8px;cursor:pointer">
+            <input type="checkbox" id="abKundeErlaeutert" style="width:auto" onchange="queueBerichtDraft()"><span>Arbeiten wurden erläutert</span>
+          </label>
+        </div>
+
+        <div class="card">
+          <div class="sec">Änderungsprotokoll</div>
+          <div id="abHistoryList" style="font-size:11px;color:#666"></div>
         </div>
 
         <div class="brow" style="margin-top:4px">
@@ -1745,7 +1830,7 @@ function addPause(m){
   if(timers[key]){timers[key].pauseMins=pauseMins;saveData();}
   alert(m+' Min Pause. Gesamt: '+pauseMins+' Min.');
 }
-function saveQuick(){if(timerSec===0){alert('Kein aktiver Timer.');return;}var net=Math.max(0,(timerSec-pauseMins*60)/3600);var maIdx=isAG()?0:activeMaIdx();var savedPause=pauseMins;var ort=currentProject();if(ort)rememberProject(ort);stopTimer(true);entries.unshift({ma:maIdx,dat:todayStr(),typ:'arbeit',start:'--',end:'--',pause:savedPause,ort:ort,notiz:'',h:parseFloat(net.toFixed(2))});timerSec=0;pauseMins=0;document.getElementById('timerDisp').textContent='00:00:00';document.getElementById('timerSub').textContent='Nicht gestartet';document.getElementById('todayNet').textContent='0,00 h';document.getElementById('todayOver').textContent='+0,00 h';document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';renderRecent();renderGlobalProjectDatalist();var cloudSave=saveData();cloudSave.then(function(ok){alert(ok?'Gespeichert'+(ort?' · '+ort:'')+' und mit Cloud synchronisiert!':'Lokal gespeichert. Cloud-Sync folgt automatisch, sobald die Verbindung steht.');}).catch(function(){alert('Lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});}
+function saveQuick(){if(timerSec===0){alert('Kein aktiver Timer.');return;}var net=Math.max(0,(timerSec-pauseMins*60)/3600);var maIdx=isAG()?0:activeMaIdx();var savedPause=pauseMins;var ort=currentProject();if(ort)rememberProject(ort);var qDatum=todayStr();stopTimer(true);entries.unshift({ma:maIdx,dat:qDatum,typ:'arbeit',start:'--',end:'--',pause:savedPause,ort:ort,notiz:'',h:parseFloat(net.toFixed(2))});timerSec=0;pauseMins=0;document.getElementById('timerDisp').textContent='00:00:00';document.getElementById('timerSub').textContent='Nicht gestartet';document.getElementById('todayNet').textContent='0,00 h';document.getElementById('todayOver').textContent='+0,00 h';document.getElementById('statusBadge').className='bdg g';document.getElementById('statusBadge').textContent='● Bereit';renderRecent();renderGlobalProjectDatalist();var cloudSave=saveData();cloudSave.then(function(ok){alert(ok?'Gespeichert'+(ort?' · '+ort:'')+' und mit Cloud synchronisiert!':'Lokal gespeichert. Cloud-Sync folgt automatisch, sobald die Verbindung steht.');}).catch(function(){alert('Lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});if(ort)handleQuickArbeitsbericht(ort,qDatum,maIdx);}
 
 // ============ RECENT ============
 function renderRecent(){
@@ -4215,11 +4300,101 @@ function collectAbMaterial(){
 }
 
 // ---- CRUD / Formular ----
-var BERICHT_STATUS_LABEL={entwurf:'Entwurf',bearbeitung:'In Bearbeitung',fertig:'Fertiggestellt',pruefung_bauleiter:'Zur Prüfung durch Bauleiter',bestaetigt_bauleiter:'Vom Bauleiter bestätigt'};
+var BERICHT_STATUS_LABEL={entwurf:'Entwurf',bearbeitung:'In Bearbeitung',fertig:'Fertiggestellt',pruefung_bauleiter:'Zur Prüfung durch Bauleiter',bestaetigt_bauleiter:'Vom Bauleiter bestätigt',erneut_pruefung_bauleiter:'Zur erneuten Prüfung durch Bauleiter'};
 function berichtStunden(p){return (p.zeiten||[]).reduce(function(a,r){return a+(Number(r.h)||0);},0);}
 function abHatBestandsfotos(p){
   var meta=p.fotoMeta||{};
   return (p.fotoIds||[]).some(function(id){return meta[id]&&meta[id].kategorie==='bestand_vorher';});
+}
+// ---- Versionssicherheit der Bauleiter-Bestätigung ----
+// Einfacher, deterministischer Fingerprint (djb2) über genau die Inhalte, die eine Bauleiter-Freigabe
+// tatsächlich bestätigt (Arbeiten/Zeiten/Fotos/Fotometadaten/Hinweise/Material/Mängel). Kein Crypto nötig,
+// es geht nur um Änderungserkennung, nicht um Fälschungssicherheit.
+function computeAbContentHash(p){
+  var payload=JSON.stringify({
+    arbeitenText:p.arbeitenText||'',
+    arbeiten:p.arbeiten||[],
+    zeiten:p.zeiten||[],
+    fotoIds:p.fotoIds||[],
+    fotoMeta:p.fotoMeta||{},
+    hinweise:p.hinweise||'',
+    material:p.material||[],
+    maengel:p.maengel||[]
+  });
+  var h=5381;
+  for(var i=0;i<payload.length;i++){h=((h*33)^payload.charCodeAt(i))>>>0;}
+  return 'v'+h.toString(16)+'_'+payload.length;
+}
+// Eine Bauleiter-Bestätigung gilt nur so lange als aktuell, wie der zuletzt gespeicherte Inhalts-Fingerprint
+// exakt dem zum Bestätigungszeitpunkt gespeicherten Fingerprint entspricht.
+function abBlIstAktuell(p){
+  return !!(p&&p.blBestaetigtAm&&p.blConfirmedHash&&p.contentHash&&p.blConfirmedHash===p.contentHash);
+}
+function currentUserLabel(){
+  return isAG()?'Arbeitgeber/Büro':((employees[activeMaIdx()]||{}).vn+' '+(employees[activeMaIdx()]||{}).nl).trim();
+}
+// Änderungsprotokoll: bewusst NUR Metadaten (Zeitstempel/Nutzer/Aktion/Version) — keine Bilddaten.
+function pushAbHistory(p,action){
+  if(!p.history)p.history=[];
+  p.history.push({timestamp:new Date().toISOString(),user:currentUserLabel(),action:action,version:p.contentVersion||0});
+  if(p.history.length>60)p.history=p.history.slice(-60);
+}
+function renderAbHistory(p){
+  var el=document.getElementById('abHistoryList');if(!el)return;
+  var h=(p&&p.history)||[];
+  if(!h.length){el.innerHTML='<div style="color:#888">Noch keine Einträge.</div>';return;}
+  el.innerHTML=h.slice().reverse().map(function(e){
+    var d=new Date(e.timestamp);
+    var ds=isNaN(d.getTime())?String(e.timestamp):(pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes()));
+    return '<div style="padding:4px 0;border-bottom:1px solid #f0f0f0">'+htmlEsc(ds)+' · '+htmlEsc(e.user||'')+' — '+htmlEsc(e.action||'')+' <span style="color:#aaa">(v'+(e.version!=null?e.version:'?')+')</span></div>';
+  }).join('');
+}
+function renderAbBlBanners(p){
+  var top=document.getElementById('berichtBlChangedBanner');
+  var invalidNow=(p.status==='erneut_pruefung_bauleiter');
+  if(top){
+    top.style.display=invalidNow?'block':'none';
+    if(invalidNow)top.textContent='⚠️ Der Bericht wurde nach der letzten Bauleiter-Bestätigung geändert. Eine erneute Prüfung und Bestätigung ist erforderlich.';
+  }
+  var validEl=document.getElementById('abBlValidBanner'),invalidEl=document.getElementById('abBlInvalidBanner');
+  var isValid=abBlIstAktuell(p);
+  if(validEl){
+    validEl.style.display=isValid?'block':'none';
+    if(isValid)validEl.textContent='✅ Vom Bauleiter bestätigt am '+fmtDateDE((p.blBestaetigtAm||'').slice(0,10))+' durch '+p.blBestaetigtDurch;
+  }
+  if(invalidEl){
+    var showOutdated=!isValid&&!!p.blBestaetigtAm;
+    invalidEl.style.display=showOutdated?'block':'none';
+    if(showOutdated)invalidEl.textContent='⚠️ Vorherige Bestätigung – nicht mehr aktuell: '+p.blBestaetigtDurch+' am '+fmtDateDE((p.blBestaetigtAm||'').slice(0,10));
+  }
+}
+// ---- Status-Aktionen (kontextabhängige Buttons je nach aktuellem Status) ----
+function renderAbStatusActions(p){
+  var el=document.getElementById('abStatusActions');if(!el)return;
+  var status=p?p.status:'entwurf';
+  var html='';
+  if(status==='entwurf'||status==='bearbeitung'){
+    html+='<button type="button" class="btn suc" style="width:100%;margin-bottom:6px" onclick="abSetStatus(\'fertig\')">✓ Fertigstellen</button>';
+  }else if(status==='fertig'){
+    html+='<button type="button" class="btn suc" style="width:100%;margin-bottom:6px" onclick="abSetStatus(\'pruefung_bauleiter\')">📤 Zur Bauleiterprüfung freigeben</button>'
+      +'<button type="button" class="btn" style="width:100%;margin-bottom:6px" onclick="abSetStatus(\'bearbeitung\')">↩ Zurück zu In Bearbeitung</button>';
+  }else if(status==='pruefung_bauleiter'){
+    html+='<div style="font-size:12px;color:#854d0e;background:#fef9c3;padding:8px 10px;border-radius:8px;margin-bottom:6px">⏳ Wartet auf Bestätigung durch den Bauleiter (siehe unten).</div>'
+      +'<button type="button" class="btn" style="width:100%;margin-bottom:6px" onclick="abSetStatus(\'fertig\')">↩ Zurück zu Fertiggestellt</button>';
+  }else if(status==='bestaetigt_bauleiter'){
+    html+='<div style="font-size:12px;color:#1e40af;background:#dbeafe;padding:8px 10px;border-radius:8px;margin-bottom:6px">✅ Vom Bauleiter bestätigt.</div>';
+  }else if(status==='erneut_pruefung_bauleiter'){
+    html+='<div style="font-size:12px;color:#92400e;background:#fef3c7;padding:8px 10px;border-radius:8px;margin-bottom:6px">⚠️ Zur erneuten Prüfung durch den Bauleiter (siehe unten).</div>';
+  }
+  el.innerHTML=html;
+}
+function abSetStatus(newStatus){
+  var stEl=document.getElementById('abStatus');if(!stEl)return;
+  stEl.value=newStatus;
+  saveArbeitsbericht(true).then(function(){
+    var p=arbeitsberichte[editingBerichtIdx];if(!p)return;
+    renderAbStatusActions(p);renderAbBlBanners(p);renderAbHistory(p);
+  });
 }
 function newArbeitsbericht(){editingBerichtIdx=-1;openBerichtForm(null);}
 function editArbeitsbericht(i){editingBerichtIdx=i;openBerichtForm(arbeitsberichte[i]);}
@@ -4227,11 +4402,14 @@ function duplicateArbeitsbericht(i){
   var src=arbeitsberichte[i];if(!src)return;
   var copy=JSON.parse(JSON.stringify(src));
   copy.id=Date.now();copy.status='entwurf';copy.datum=todayStr();
-  delete copy.blBestaetigtAm;copy.blGeaendertNachBestaetigung=false;
+  copy.unterschriften={monteur:{name:'',funktion:'Monteur / Mitarbeiter',datum:'',sig:''},bauleiter:{name:'',funktion:'Bauleiter',datum:'',sig:'',bemerkung:'',geprueftArbeiten:false,geprueftDoku:false},kunde:{name:'',datum:'',sig:'',erlaeutert:false}};
+  copy.blBestaetigtAm='';copy.blBestaetigtDurch='';copy.blConfirmedHash='';copy.blConfirmations=[];
+  copy.contentVersion=0;copy.contentHash='';
+  copy.history=[{timestamp:new Date().toISOString(),user:currentUserLabel(),action:'Bericht erstellt',version:0}];
   copy.createdAt=new Date().toISOString();copy.updatedAt=copy.createdAt;
   arbeitsberichte.unshift(copy);
   saveData();renderBdBerichte();
-  alert('Arbeitsbericht dupliziert. Du kannst die Kopie jetzt bearbeiten.');
+  alert('Arbeitsbericht dupliziert (ohne Unterschriften/Historie). Du kannst die Kopie jetzt bearbeiten.');
 }
 function deleteArbeitsbericht(i){
   var p=arbeitsberichte[i];if(!p)return;
@@ -4287,8 +4465,25 @@ function openBerichtForm(p){
   document.getElementById('abMatRows').innerHTML='';
   (p&&p.material&&p.material.length?p.material:[]).forEach(function(m){addAbMatRow(m);});
 
-  var banner=document.getElementById('berichtBlChangedBanner');
-  if(banner)banner.style.display=(p&&p.blGeaendertNachBestaetigung)?'block':'none';
+  // ---- Unterschriften ----
+  var u=(p&&p.unterschriften)||{};
+  var um=u.monteur||{},ub=u.bauleiter||{},uk=u.kunde||{};
+  document.getElementById('abSigMonteurName').value=um.name||(p?'':(isAG()?'':((employees[activeMaIdx()]||{}).vn+' '+(employees[activeMaIdx()]||{}).nl).trim()));
+  document.getElementById('abSigMonteurDatum').value=um.datum||todayStr();
+  document.getElementById('abSigBauleiterName').value=ub.name||'';
+  document.getElementById('abSigBauleiterDatum').value=ub.datum||todayStr();
+  document.getElementById('abBlBemerkung').value=ub.bemerkung||'';
+  document.getElementById('abBlGeprueftArbeiten').checked=!!ub.geprueftArbeiten;
+  document.getElementById('abBlGeprueftDoku').checked=!!ub.geprueftDoku;
+  document.getElementById('abSigKundeName').value=uk.name||'';
+  document.getElementById('abSigKundeDatum').value=uk.datum||todayStr();
+  document.getElementById('abKundeErlaeutert').checked=!!uk.erlaeutert;
+  initAbSigPads(p);
+
+  var pForBanners=p||{status:stEl.value,blBestaetigtAm:'',blConfirmedHash:'',contentHash:''};
+  renderAbBlBanners(pForBanners);
+  renderAbStatusActions(pForBanners);
+  renderAbHistory(p);
 
   window.scrollTo(0,0);
 }
@@ -4320,10 +4515,11 @@ function buildBerichtFromForm(){
     fotoMeta:fotoMeta,
     hinweise:document.getElementById('abHinweise').value,
     maengel:collectAbMaengel(),
-    material:collectAbMaterial()
+    material:collectAbMaterial(),
+    unterschriften:collectAbUnterschriften()
   };
 }
-function saveArbeitsbericht(silent){
+function saveArbeitsbericht(silent,actionOverride){
   var baustelle=document.getElementById('abBaustelle').value;
   if(!baustelle){alert('Keine Baustelle zugeordnet.');return Promise.resolve(false);}
   var p=buildBerichtFromForm();
@@ -4332,20 +4528,31 @@ function saveArbeitsbericht(silent){
   p.erstelltVon=prev?prev.erstelltVon:(isAG()?'Arbeitgeber/Büro':((employees[activeMaIdx()]||{}).vn+' '+(employees[activeMaIdx()]||{}).nl).trim());
   p.createdAt=prev?prev.createdAt:new Date().toISOString();
   p.updatedAt=new Date().toISOString();
-  if(prev&&prev.blBestaetigtAm){
-    p.blBestaetigtAm=prev.blBestaetigtAm;
-    var relevantChanged=JSON.stringify(prev.zeiten)!==JSON.stringify(p.zeiten)
-      ||JSON.stringify(prev.arbeiten)!==JSON.stringify(p.arbeiten)
-      ||JSON.stringify(prev.arbeitenText)!==JSON.stringify(p.arbeitenText)
-      ||JSON.stringify(prev.fotoIds)!==JSON.stringify(p.fotoIds)
-      ||JSON.stringify(prev.fotoMeta)!==JSON.stringify(p.fotoMeta)
-      ||JSON.stringify(prev.material)!==JSON.stringify(p.material)
-      ||JSON.stringify(prev.maengel)!==JSON.stringify(p.maengel);
-    p.blGeaendertNachBestaetigung=relevantChanged?true:!!prev.blGeaendertNachBestaetigung;
-    if(relevantChanged&&p.status==='bestaetigt_bauleiter')p.status='pruefung_bauleiter';
-  }else{
-    p.blGeaendertNachBestaetigung=false;
+  p.contentVersion=prev?(prev.contentVersion||0):0;
+  p.history=prev?(prev.history||[]):[];
+  // Bauleiter-Bestätigungsfelder werden NICHT über das normale Formular verändert, nur über confirmBauleiterBestaetigung()
+  p.blBestaetigtAm=prev?(prev.blBestaetigtAm||''):'';
+  p.blBestaetigtDurch=prev?(prev.blBestaetigtDurch||''):'';
+  p.blConfirmedHash=prev?(prev.blConfirmedHash||''):'';
+  p.blConfirmations=prev?(prev.blConfirmations||[]):[];
+
+  var newHash=computeAbContentHash(p);
+  var wasValidBefore=!!prev&&abBlIstAktuell(prev);
+  var invalidatedNow=wasValidBefore&&newHash!==prev.contentHash;
+  if(invalidatedNow)p.status='erneut_pruefung_bauleiter';
+
+  var action=actionOverride;
+  if(!action){
+    if(!prev)action='Bericht erstellt';
+    else if(invalidatedNow)action='Nach Bestätigung geändert';
+    else if(prev.status!==p.status){
+      action={fertig:'Fertiggestellt',pruefung_bauleiter:'Zur Bauleiterprüfung freigegeben',bestaetigt_bauleiter:'Bauleiter bestätigt',erneut_pruefung_bauleiter:'Nach Bestätigung geändert'}[p.status]||'Bericht geändert';
+    }else action='Bericht geändert';
   }
+  p.contentHash=newHash;
+  p.contentVersion=(p.contentVersion||0)+1;
+  pushAbHistory(p,action);
+
   rememberProject(baustelle,p.adresse,p.kunde);
   if(p.material&&p.material.length){
     p.material.forEach(function(m){
@@ -4357,8 +4564,9 @@ function saveArbeitsbericht(silent){
   var cloudSave=saveData();
   fillDlAbMaterial();
   clearBerichtDraft();
-  var banner=document.getElementById('berichtBlChangedBanner');
-  if(banner)banner.style.display=p.blGeaendertNachBestaetigung?'block':'none';
+  renderAbBlBanners(p);
+  renderAbStatusActions(p);
+  renderAbHistory(p);
   if(!silent){
     cloudSave.then(function(ok){
       alert(ok?'Arbeitsbericht gespeichert und mit Firebase synchronisiert!':'Arbeitsbericht lokal gespeichert. Cloud-Sync folgt automatisch.');
@@ -4369,6 +4577,33 @@ function saveArbeitsbericht(silent){
     });
   }
   return cloudSave;
+}
+// ---- Bauleiter-Bestätigung ----
+function confirmBauleiterBestaetigung(){
+  var name=document.getElementById('abSigBauleiterName').value.trim();
+  var sp=sigPads['abSigBauleiter'];
+  var hasSig=(sp&&sp.dirty)||!!abPendingSigs.bauleiter;
+  if(!name){alert('Bitte zuerst den Namen des Bauleiters eintragen.');return;}
+  if(!hasSig){alert('Bitte zuerst die Unterschrift des Bauleiters erfassen.');return;}
+  if(!abSigLocked.bauleiter)abSignRole('bauleiter');
+  saveArbeitsbericht(true).then(function(){
+    var p=arbeitsberichte[editingBerichtIdx];if(!p)return;
+    var wasConfirmedBefore=!!p.blBestaetigtAm;
+    if(wasConfirmedBefore){
+      p.blConfirmations=p.blConfirmations||[];
+      p.blConfirmations.push({name:p.blBestaetigtDurch||'',datum:p.blBestaetigtAm||'',hash:p.blConfirmedHash||''});
+      if(p.blConfirmations.length>20)p.blConfirmations=p.blConfirmations.slice(-20); // Speicherbegrenzung: nur Metadaten, keine Bilder — trotzdem gedeckelt
+    }
+    p.blBestaetigtAm=new Date().toISOString();
+    p.blBestaetigtDurch=name;
+    p.blConfirmedHash=p.contentHash;
+    p.status='bestaetigt_bauleiter';
+    pushAbHistory(p,wasConfirmedBefore?'Erneut bestätigt':'Bauleiter bestätigt');
+    saveData();
+    var stEl=document.getElementById('abStatus');if(stEl)stEl.value=p.status;
+    renderAbBlBanners(p);renderAbStatusActions(p);renderAbHistory(p);
+    alert('✅ Bericht wurde durch den Bauleiter bestätigt.');
+  });
 }
 function renderBdBerichte(){
   var lv=document.getElementById('bdBerichteListView');if(lv)lv.style.display='block';
@@ -4389,7 +4624,7 @@ function renderBdBerichte(){
     var statusLabel=BERICHT_STATUS_LABEL[p.status]||'Entwurf';
     return '<div class="ber-row" onclick="editArbeitsbericht('+i+')">'
       +'<div class="ber-info"><div class="ber-title">'+htmlEsc(fmtDateDE(p.datum))+(maNames?' · '+htmlEsc(maNames):'')+'</div>'
-      +'<div class="ber-sub">'+berichtStunden(p).toFixed(2).replace('.',',')+' h · <span class="status-pill '+statusCls+'">'+statusLabel+'</span>'+(p.blGeaendertNachBestaetigung?' <span class="status-pill status-bearbeitung">⚠️ erneute Prüfung nötig</span>':'')+'</div></div>'
+      +'<div class="ber-sub">'+berichtStunden(p).toFixed(2).replace('.',',')+' h · <span class="status-pill '+statusCls+'">'+statusLabel+'</span></div></div>'
       +'<div class="ber-actions">'
       +'<button type="button" class="btn" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();editArbeitsbericht('+i+')">✎</button>'
       +'<button type="button" class="btn inf" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();arbeitsberichtPDF('+i+')">📄</button>'
@@ -4397,6 +4632,145 @@ function renderBdBerichte(){
       +'<button type="button" class="btn dan" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();deleteArbeitsbericht('+i+')">🗑</button>'
       +'</div></div>';
   }).join('');
+}
+
+// ---- Arbeitsbericht Unterschriften (Monteur / Bauleiter / Kunde) ----
+// Wiederverwendung der bestehenden Canvas-Signatur-Infrastruktur (sigPads/initSigPad/clearSig/sigDataURL/loadSig),
+// ergänzt um eine "Unterschreiben / Löschen / Neu unterschreiben"-Sperrlogik pro Rolle.
+var abPendingSigs={monteur:'',bauleiter:'',kunde:''};
+var abSigLocked={monteur:false,bauleiter:false,kunde:false};
+var ABSIG_ROLE_EL={
+  monteur:{canvas:'abSigMonteur',signBtn:'abSigMonteurSignBtn',resignBtn:'abSigMonteurResignBtn'},
+  bauleiter:{canvas:'abSigBauleiter',signBtn:'abSigBauleiterSignBtn',resignBtn:'abSigBauleiterResignBtn'},
+  kunde:{canvas:'abSigKunde',signBtn:'abSigKundeSignBtn',resignBtn:'abSigKundeResignBtn'}
+};
+function abSigCanvasId(role){var e=ABSIG_ROLE_EL[role];return e?e.canvas:'';}
+function initAbSigPads(p){
+  var u=(p&&p.unterschriften)||{};
+  abPendingSigs={
+    monteur:(u.monteur&&u.monteur.sig)||'',
+    bauleiter:(u.bauleiter&&u.bauleiter.sig)||'',
+    kunde:(u.kunde&&u.kunde.sig)||''
+  };
+  abSigLocked={monteur:false,bauleiter:false,kunde:false};
+  setTimeout(function(){
+    Object.keys(ABSIG_ROLE_EL).forEach(function(role){
+      var cid=abSigCanvasId(role);if(!cid)return;
+      if(!sigPads[cid])initSigPad(cid);else clearSig(cid);
+      if(abPendingSigs[role]){
+        loadSig(cid,abPendingSigs[role]);
+        abSigLocked[role]=true;
+      }
+      abApplySigLockUI(role);
+    });
+  },60);
+}
+function abApplySigLockUI(role){
+  var el=ABSIG_ROLE_EL[role];if(!el)return;
+  var locked=!!abSigLocked[role];
+  var c=document.getElementById(el.canvas);
+  if(c)c.classList.toggle('ab-sig-locked',locked);
+  var signBtn=document.getElementById(el.signBtn);
+  var resignBtn=document.getElementById(el.resignBtn);
+  if(signBtn)signBtn.style.display=locked?'none':'';
+  if(resignBtn)resignBtn.style.display=locked?'':'none';
+}
+function abSignRole(role){
+  var cid=abSigCanvasId(role);if(!cid)return;
+  var sp=sigPads[cid];
+  var hasNewDrawing=!!(sp&&sp.dirty);
+  if(!hasNewDrawing&&!abPendingSigs[role]){alert('Bitte zuerst mit dem Finger oder Stift im Feld unterschreiben.');return;}
+  if(hasNewDrawing)abPendingSigs[role]=sigDataURL(cid);
+  abSigLocked[role]=true;
+  abApplySigLockUI(role);
+  if(typeof queueBerichtDraft==='function')queueBerichtDraft();
+}
+function abClearSig(role){
+  var cid=abSigCanvasId(role);if(!cid)return;
+  clearSig(cid);
+  abPendingSigs[role]='';
+  abSigLocked[role]=false;
+  abApplySigLockUI(role);
+  if(typeof queueBerichtDraft==='function')queueBerichtDraft();
+}
+function abResignRole(role){
+  var cid=abSigCanvasId(role);if(!cid)return;
+  clearSig(cid);
+  abPendingSigs[role]='';
+  abSigLocked[role]=false;
+  abApplySigLockUI(role);
+}
+function collectAbUnterschriften(){
+  return {
+    monteur:{
+      name:document.getElementById('abSigMonteurName').value||'',
+      datum:document.getElementById('abSigMonteurDatum').value||'',
+      sig:sigDataURL('abSigMonteur')||abPendingSigs.monteur||''
+    },
+    bauleiter:{
+      name:document.getElementById('abSigBauleiterName').value||'',
+      datum:document.getElementById('abSigBauleiterDatum').value||'',
+      sig:sigDataURL('abSigBauleiter')||abPendingSigs.bauleiter||'',
+      bemerkung:document.getElementById('abBlBemerkung').value||'',
+      geprueftArbeiten:document.getElementById('abBlGeprueftArbeiten').checked,
+      geprueftDoku:document.getElementById('abBlGeprueftDoku').checked
+    },
+    kunde:{
+      name:document.getElementById('abSigKundeName').value||'',
+      datum:document.getElementById('abSigKundeDatum').value||'',
+      sig:sigDataURL('abSigKunde')||abPendingSigs.kunde||'',
+      erlaeutert:document.getElementById('abKundeErlaeutert').checked
+    }
+  };
+}
+
+// ---- Schnellfunktion nach Arbeitsende (Bottom-Sheet nach Timer-Stop, wenn Baustelle zugeordnet) ----
+function findExistingBerichtFor(baustelle,datum,maIdx){
+  var key=projectKey(baustelle);
+  for(var i=0;i<arbeitsberichte.length;i++){
+    var p=arbeitsberichte[i];
+    if(projectKey(p.baustelle)!==key||p.datum!==datum)continue;
+    if(isAG())return i; // AG: Tagesbericht-Erkennung projektbezogen (nicht an ein einzelnes Mitarbeiter-Signal gebunden)
+    if((p.mitarbeiterIds||[]).indexOf(maIdx)>-1)return i;
+  }
+  return -1;
+}
+function showQaSheet(title,buttons){
+  var sheet=document.getElementById('qaSheet');if(!sheet)return;
+  document.getElementById('qaSheetTitle').textContent=title;
+  document.getElementById('qaSheetButtons').innerHTML=(buttons||[]).map(function(b,bi){
+    return '<button type="button" class="btn '+(b.cls||'')+'" onclick="qaSheetBtnClick('+bi+')">'+htmlEsc(b.label)+'</button>';
+  }).join('');
+  window._qaSheetActions=(buttons||[]).map(function(b){return b.action;});
+  sheet.classList.add('open');
+}
+function qaSheetBtnClick(i){
+  var actions=window._qaSheetActions||[];
+  var fn=actions[i];
+  closeQaSheet();
+  if(typeof fn==='function')fn();
+}
+function closeQaSheet(){
+  var sheet=document.getElementById('qaSheet');if(sheet)sheet.classList.remove('open');
+}
+function handleQuickArbeitsbericht(baustelle,datum,maIdx){
+  if(!baustelle)return; // Zeiteintrag war keiner Baustelle zugeordnet -> keine Schnellfunktion
+  showQaSheet('Arbeit auf '+baustelle+' beendet.',[
+    {label:'📝 Arbeitsbericht erstellen',cls:'suc',action:function(){
+      var existingIdx=findExistingBerichtFor(baustelle,datum,maIdx);
+      if(existingIdx>-1){
+        showQaSheet('Für heute existiert bereits ein Arbeitsbericht.',[
+          {label:'Bericht öffnen',cls:'suc',action:function(){openProject(baustelle);showBdSub('berichte');editArbeitsbericht(existingIdx);}},
+          {label:'Neuen Bericht erstellen',cls:'',action:function(){openProject(baustelle);showBdSub('berichte');newArbeitsbericht();}},
+          {label:'Abbrechen',cls:'dan',action:function(){}}
+        ]);
+      }else{
+        openProject(baustelle);showBdSub('berichte');newArbeitsbericht();
+      }
+    }},
+    {label:'📷 Baustellenfoto hinzufügen',cls:'inf',action:function(){openProjectAction('foto',baustelle);}},
+    {label:'Später',cls:'',action:function(){}}
+  ]);
 }
 
 // ---- Autosave / Entwurf (Muster identisch zum Protokoll-Entwurf) ----
@@ -4484,6 +4858,18 @@ function buildArbeitsberichtPDF(p,fotoRecs,imgs){
   doc.text(pdfSafe((firma&&firma.name)?firma.name:''),M,y);
   doc.text('Erstellt am '+new Date().toLocaleDateString('de-DE'),PW-M,y,{align:'right'});
   y+=6;
+  // ---- Versionsinfo: eindeutige Zuordnung dieses PDFs zu einem konkreten Berichtsstand ----
+  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(140,140,140);
+  var versionParts=[
+    'Berichts-ID: '+(p.id||'—'),
+    'Version: '+(p.contentVersion||1),
+    'Erstellt: '+(p.createdAt?fmtDateDE(p.createdAt.substring(0,10)):'—'),
+    'Letzte Änderung: '+(p.updatedAt?fmtDateDE(p.updatedAt.substring(0,10)):'—')
+  ];
+  if(abBlIstAktuell(p))versionParts.push('Bestätigt am: '+fmtDateDE(p.blBestaetigtAm.substring(0,10))+' durch: '+pdfSafe(p.blBestaetigtDurch||''));
+  var vt=doc.splitTextToSize(versionParts.join('   ·   '),PW-2*M);
+  nl(vt.length*3.4+2);
+  doc.text(vt,M,y);y+=vt.length*3.4+3;
   h2('Projekt / Baustelle');
   var maNames=(p.mitarbeiterIds||[]).map(function(mi){var ma=employees[mi];return ma?(ma.vn+' '+ma.nl):'';}).filter(Boolean).join(', ');
   kv([
@@ -4591,15 +4977,61 @@ function buildArbeitsberichtPDF(p,fotoRecs,imgs){
     doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(120,120,120);
     doc.text('Keine Fotos zu diesem Arbeitsbericht hinzugefügt.',M,y);y+=6;
   }
-  nl(30);h2('Bestätigung');
-  var gap=8,sw=(PW-2*M-2*gap)/3,sh=16,sx1=M,sx2=M+sw+gap,sx3=M+2*(sw+gap);
-  doc.setDrawColor(150,150,150);doc.setLineWidth(0.2);
-  doc.line(sx1,y+sh,sx1+sw,y+sh);doc.line(sx2,y+sh,sx2+sw,y+sh);doc.line(sx3,y+sh,sx3+sw,y+sh);
-  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(110,110,110);
-  doc.text('Monteur / Mitarbeiter',sx1,y+sh+4);
-  doc.text('Bauleiter',sx2,y+sh+4);
-  doc.text('Kunde / Auftraggeber (optional)',sx3,y+sh+4);
-  y+=sh+8;
+  nl(30);h2('UNTERSCHRIFTEN / FREIGABE');
+  var u=p.unterschriften||{};
+  var um=u.monteur||{},ub=u.bauleiter||{},uk=u.kunde||{};
+  var sigW=62,sigH=20;
+  function drawSigRow(title,name,datumIso,sigDataUrl,statusLines){
+    nl(sigH+16+((statusLines||[]).length*3.8));
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(17,17,17);
+    doc.text(title,M,y);
+    y+=5;
+    if(sigDataUrl){
+      try{doc.addImage(sigDataUrl,'JPEG',M,y,sigW,sigH);}catch(e){}
+    }else{
+      doc.setDrawColor(190,190,190);doc.setLineWidth(0.2);
+      doc.line(M,y+sigH,M+sigW,y+sigH);
+      doc.setFont('helvetica','italic');doc.setFontSize(7.5);doc.setTextColor(150,150,150);
+      doc.text('keine Unterschrift erfasst',M+2,y+sigH-2);
+    }
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(60,60,60);
+    doc.text('Name: '+pdfSafe(name||'—'),M+sigW+8,y+7);
+    doc.text('Datum: '+(datumIso?fmtDateDE(datumIso):'—'),M+sigW+8,y+12);
+    var ly=y+sigH+5;
+    (statusLines||[]).forEach(function(l){
+      doc.setFont('helvetica',l.bold?'bold':'normal');
+      doc.setFontSize(l.small?7.5:8);
+      var c=l.color||[60,60,60];
+      doc.setTextColor(c[0],c[1],c[2]);
+      var wl=doc.splitTextToSize(l.text,PW-2*M);
+      doc.text(wl,M,ly);
+      ly+=wl.length*3.8;
+    });
+    y=ly+3;
+  }
+  drawSigRow('Monteur / Mitarbeiter',um.name,um.datum,um.sig,null);
+  var blAktuell=abBlIstAktuell(p);
+  if(blAktuell){
+    var blLines=[{text:'Status: Vom Bauleiter bestätigt',bold:true,color:[22,101,52]}];
+    if(ub.bemerkung)blLines.push({text:'Bemerkung: '+pdfSafe(ub.bemerkung),small:true});
+    drawSigRow('Bauleiter',p.blBestaetigtDurch||ub.name,p.blBestaetigtAm?p.blBestaetigtAm.substring(0,10):ub.datum,ub.sig,blLines);
+  }else{
+    nl(18);
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(17,17,17);
+    doc.text('Bauleiter',M,y);y+=5;
+    doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(153,27,27);
+    doc.text('Keine aktuelle Bauleiterfreigabe vorhanden.',M,y);y+=5;
+    if(p.blBestaetigtAm){
+      doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(120,120,120);
+      var prevLine=doc.splitTextToSize('Letzte Bestätigung: '+pdfSafe(p.blBestaetigtDurch||'—')+' / '+fmtDateDE(p.blBestaetigtAm.substring(0,10))+' – durch spätere Änderung ungültig geworden.',PW-2*M);
+      doc.text(prevLine,M,y);y+=prevLine.length*3.8+2;
+    }
+    y+=3;
+  }
+  if(uk.sig||uk.name){
+    var kLines=uk.erlaeutert?[{text:'Arbeiten wurden erläutert: Ja',small:true}]:null;
+    drawSigRow('Kunde / Auftraggeber (optional)',uk.name,uk.datum,uk.sig,kLines);
+  }
   var pages=doc.internal.getNumberOfPages();
   for(var pi=1;pi<=pages;pi++){
     doc.setPage(pi);
