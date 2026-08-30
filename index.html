@@ -1359,7 +1359,7 @@ var entries = [];
 var fotos = [];
 var baustellen = []; // {name, adresse, kunde, lat, lng, dat}
 var protokolle = []; // Prüf-/Abnahmeprotokolle nach DIN EN 62446
-var komponentenDB = {module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]}; // wiederverwendbare Hersteller/Typen
+var komponentenDB = {module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[],geschosse:[]}; // wiederverwendbare Hersteller/Typen; geschosse[] = benutzerdefinierte, dauerhaft gespeicherte Etagen-Ergänzungen (Arbeitsbericht-Fotodokumentation)
 var arbeitsberichte = []; // Arbeitsberichte / Baudokumentation je Baustelle (siehe ABERICHT_KATEGORIEN)
 var dokumente = []; // {baustelle,name,url,typ,ma,datum} — Projektdokumente (Firebase Storage)
 var currentBdBaustelle = null; // Name der aktuell geöffneten Baustelle-Detailansicht
@@ -1382,7 +1382,8 @@ var ABERICHT_KATEGORIEN = [
   ['messung','Messung / Prüfung'],
   ['sonstiges','Sonstiges']
 ];
-var ABERICHT_GESCHOSSE = ['Keller','EG','1. OG','2. OG','3. OG','4. OG','Dach','Sonstiges'];
+var ABERICHT_GESCHOSSE = ['UG / Keller','EG','Zwischengeschoss','1. OG','2. OG','3. OG','4. OG','5. OG','6. OG','7. OG','8. OG','9. OG','10. OG','Dachgeschoss','Dach','Außenbereich','Technikraum','Sonstiges']; // Standardliste; benutzerdefinierte Ergänzungen liegen dauerhaft in komponentenDB.geschosse
+var AB_GESCHOSS_NEU='__ab_geschoss_neu__'; // Sentinel-Wert der Dropdown-Option "+ Weitere Etage hinzufügen" — niemals ein echter Geschoss-Wert
 var ABERICHT_ARB_KATEGORIEN = ['Elektroinstallation','Kabelverlegung','Brandschutz','Montage','Demontage','Prüfung / Messung','Fehlersuche','Sonstiges'];
 var firma = {name:'',str:'',plz:''};
 var currentUser = null;
@@ -2769,7 +2770,7 @@ function loadLocal(){
     if(data.timers)timers=data.timers;
     if(data.firma)firma=data.firma;
     if(Array.isArray(data.protokolle))protokolle=data.protokolle;
-    if(data.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},data.komponentenDB);
+    if(data.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[],geschosse:[]},data.komponentenDB);
     if(Array.isArray(data.arbeitsberichte))arbeitsberichte=data.arbeitsberichte;
     if(Array.isArray(data.dokumente))dokumente=data.dokumente;
     if(data.savedAt)localSavedAt=data.savedAt;
@@ -2875,7 +2876,7 @@ function initFirebase(){
           if(d.timers)timers=d.timers;
           if(d.firma)firma=d.firma;
           if(Array.isArray(d.protokolle))protokolle=d.protokolle;
-          if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[]},d.komponentenDB);
+          if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[],geschosse:[]},d.komponentenDB);
           if(Array.isArray(d.arbeitsberichte))arbeitsberichte=d.arbeitsberichte;
           if(Array.isArray(d.dokumente))dokumente=d.dokumente;
           cloudProtDraft=d.protDraft||null;
@@ -4192,6 +4193,21 @@ function handleAbFotos(files){
   document.getElementById('abFotoCam').value='';
   document.getElementById('abFotoGal').value='';
 }
+// Liefert die vollständige, aktuell gültige Geschoss-Liste für ein Dropdown: Standardliste +
+// dauerhaft gespeicherte benutzerdefinierte Etagen (komponentenDB.geschosse) + — falls der aktuell
+// gespeicherte Wert dieses Fotos in keiner der beiden Listen vorkommt (z.B. ein alter Wert wie "Keller"
+// aus der Zeit vor dieser Erweiterung, oder ein Fremd-/Cloud-Wert eines anderen Geräts) — diesen Wert
+// zusätzlich, damit bereits gespeicherte Arbeitsberichte niemals ihren Geschoss-Wert verlieren oder
+// beim Öffnen fälschlich auf "kein Geschoss" zurückfallen.
+function abAlleGeschosse(currentVal){
+  var list=ABERICHT_GESCHOSSE.slice();
+  var lower=list.map(function(g){return g.toLowerCase();});
+  (komponentenDB.geschosse||[]).forEach(function(g){
+    if(g&&lower.indexOf(g.toLowerCase())===-1){list.push(g);lower.push(g.toLowerCase());}
+  });
+  if(currentVal&&lower.indexOf(currentVal.toLowerCase())===-1){list.push(currentVal);}
+  return list;
+}
 function renderAbFotosList(){
   var el=document.getElementById('abFotosList');if(!el)return;
   if(!abCurrentFotos.length){el.innerHTML='<div style="color:#888;font-size:12px;padding:8px 0;text-align:center">Noch keine Fotos zu diesem Bericht hinzugefügt.</div>';return;}
@@ -4205,7 +4221,10 @@ function renderAbFotosList(){
       +'</select>'
       +'<input type="text" placeholder="Beschreibung" value="'+htmlEsc(f.beschreibung||'')+'" onchange="abFotoMetaChange('+i+',\'beschreibung\',this.value)" style="width:100%">'
       +'<div style="display:flex;gap:6px">'
-      +'<select onchange="abFotoMetaChange('+i+',\'geschoss\',this.value)" style="flex:1"><option value="">Geschoss</option>'+ABERICHT_GESCHOSSE.map(function(g){return '<option'+(f.geschoss===g?' selected':'')+'>'+g+'</option>';}).join('')+'</select>'
+      +'<select onchange="abGeschossSelectChange('+i+',this.value)" style="flex:1"><option value="">Geschoss</option>'
+      +abAlleGeschosse(f.geschoss).map(function(g){return '<option'+(f.geschoss===g?' selected':'')+'>'+htmlEsc(g)+'</option>';}).join('')
+      +'<option value="'+AB_GESCHOSS_NEU+'">+ Weitere Etage hinzufügen</option>'
+      +'</select>'
       +'<input type="text" placeholder="Raum / Bereich" value="'+htmlEsc(f.raum||'')+'" onchange="abFotoMetaChange('+i+',\'raum\',this.value)" style="flex:1">'
       +'</div>'
       +'<input type="date" value="'+(f.datum||'')+'" onchange="abFotoMetaChange('+i+',\'datum\',this.value)" style="width:100%">'
@@ -4218,6 +4237,31 @@ function abFotoMetaChange(i,field,val){
   if(!abCurrentFotos[i])return;
   abCurrentFotos[i][field]=val;
   if(field==='kategorie')renderAbFotosList();
+  queueBerichtDraft();
+}
+// Sonderbehandlung für das Geschoss-Dropdown: bei Auswahl von "+ Weitere Etage hinzufügen" wird ein
+// Eingabedialog geöffnet, statt den Sentinel-Wert als Geschoss zu übernehmen.
+function abGeschossSelectChange(i,val){
+  if(val===AB_GESCHOSS_NEU){abAddNewGeschoss(i);return;}
+  abFotoMetaChange(i,'geschoss',val);
+}
+function abAddNewGeschoss(i){
+  var f=abCurrentFotos[i];
+  var name=prompt('Neue Etage / neues Geschoss (z.B. "11. OG", "Penthouse", "Mezzanin"):');
+  if(name===null||!name.trim()){renderAbFotosList();return;} // abgebrochen -> Dropdown auf bisherigen Wert zurücksetzen
+  name=name.trim();
+  var vorhanden=abAlleGeschosse(null).filter(function(g){return g.toLowerCase()===name.toLowerCase();})[0];
+  if(vorhanden){
+    // Keine Duplikate: existiert (auch in anderer Groß-/Kleinschreibung) bereits -> vorhandenen Eintrag verwenden.
+    name=vorhanden;
+  }else{
+    if(!komponentenDB.geschosse)komponentenDB.geschosse=[];
+    komponentenDB.geschosse.push(name);
+    saveData(); // benutzerdefinierte Etage sofort dauerhaft in localStorage/Firestore mitsynchronisieren,
+                // unabhängig davon, ob der aktuelle Arbeitsbericht selbst schon gespeichert wurde
+  }
+  if(f)f.geschoss=name;
+  renderAbFotosList();
   queueBerichtDraft();
 }
 function removeAbFoto(i){
