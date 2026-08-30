@@ -3058,6 +3058,8 @@ function restoreProtDraft(){
   }catch(e){alert('Entwurf konnte nicht geladen werden.');}
 }
 function clearProtDraft(){
+  clearTimeout(protDraftTimer); // verhindert, dass ein noch laufender Autosave-Timer den gerade gelöschten/gespeicherten
+                                 // Entwurf Millisekunden später erneut anlegt (dieselbe Race-Condition wie beim Bericht-Entwurf)
   try{localStorage.removeItem('az_prot_draft');}catch(e){}
   cloudProtDraft=null;
   if(firebaseReady&&cloudSynced&&docRef){
@@ -4806,6 +4808,8 @@ function restoreBerichtDraft(){
   }catch(e){alert('Entwurf konnte nicht geladen werden.');}
 }
 function clearBerichtDraft(){
+  clearTimeout(berichtDraftTimer); // verhindert, dass ein noch laufender Autosave-Timer (queueBerichtDraft) den gerade
+                                    // gelöschten/gespeicherten Entwurf Millisekunden später erneut anlegt (Race-Condition)
   try{localStorage.removeItem('az_bericht_draft');}catch(e){}
   cloudBerichtDraft=null;
   if(firebaseReady&&cloudSynced&&docRef){
