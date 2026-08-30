@@ -1367,6 +1367,8 @@ var currentBdSub = 'uebersicht';
 var editingBerichtIdx = -1;
 var berichtDraftTimer = null;
 var cloudBerichtDraft = null;
+var isLoadingArbeitsbericht = false; // true während openBerichtForm() ein Formular (neu/bestehend/Entwurf) befüllt —
+                                      // verhindert, dass das reine Laden/Anzeigen einen Autosave-Entwurf erzeugt
 var abFotoPickSel = {}; // {publicId:true} während der Fotoauswahl im Bericht-Formular
 var ABERICHT_KATEGORIEN = [
   ['ausgefuehrt','Ausgeführte Arbeiten'],
@@ -4000,7 +4002,7 @@ function abToggleZeitMode(){
   var wrap=document.getElementById('abZeitManuellWrap');
   if(wrap)wrap.style.display=autoEl.checked?'none':'block';
 }
-function refreshAbZeiten(){
+function refreshAbZeiten(autosave){
   var autoEl=document.getElementById('abZeitAuto');if(!autoEl)return;
   abToggleZeitMode();
   if(autoEl.checked){
@@ -4010,7 +4012,7 @@ function refreshAbZeiten(){
     abZeitRows=seed.length?seed:[{dat:(document.getElementById('abDatum')||{}).value||todayStr(),ma:collectAbMaIdx()[0]||0,start:'08:00',end:'16:00',pause:30,h:0}];
   }
   renderAbZeitTable();
-  queueBerichtDraft();
+  if(autosave!==false)queueBerichtDraft(); // autosave===false: programmatisches Laden (z.B. openBerichtForm), keine Nutzeränderung
 }
 function onAbDatumChange(){
   var d=document.getElementById('abDatum').value;
@@ -4061,7 +4063,7 @@ function removeAbZeitRow(i){
 }
 
 // ---- Ausgeführte Arbeiten / Arbeitspositionen ----
-function addAbPosRow(d){
+function addAbPosRow(d,autosave){
   d=d||{};
   var wrap=document.getElementById('abPosRows');if(!wrap)return;
   var div=document.createElement('div');
@@ -4076,7 +4078,7 @@ function addAbPosRow(d){
     +'<textarea class="pos-text" placeholder="Ausgeführte Arbeit beschreiben…" oninput="queueBerichtDraft()">'+htmlEsc(d.text||'')+'</textarea></div>'
     +'<button type="button" class="btn dan" style="flex:0;padding:5px 8px;font-size:11px" onclick="this.closest(\'.arb-pos-row\').remove();queueBerichtDraft()">✕</button>';
   wrap.appendChild(div);
-  queueBerichtDraft();
+  if(autosave!==false)queueBerichtDraft(); // autosave===false: programmatisches Laden, keine Nutzeränderung
 }
 function moveAbPos(btn,dir){
   var row=btn.closest('.arb-pos-row');if(!row)return;
@@ -4252,7 +4254,7 @@ function confirmAbFotoPick(){
 }
 
 // ---- Festgestellte Mängel ----
-function addAbMangelRow(d){
+function addAbMangelRow(d,autosave){
   d=d||{};
   var wrap=document.getElementById('abMaengelRows');if(!wrap)return;
   var div=document.createElement('div');
@@ -4265,7 +4267,7 @@ function addAbMangelRow(d){
     +'<button type="button" class="btn dan" style="flex:0;padding:5px 8px;font-size:11px" onclick="this.closest(\'.mangel-row\').remove();queueBerichtDraft()">✕</button>'
     +'</div>';
   wrap.appendChild(div);
-  queueBerichtDraft();
+  if(autosave!==false)queueBerichtDraft(); // autosave===false: programmatisches Laden, keine Nutzeränderung
 }
 function collectAbMaengel(){
   return Array.from(document.querySelectorAll('#abMaengelRows .mangel-row')).map(function(r){
@@ -4279,7 +4281,7 @@ function fillDlAbMaterial(){
   var uniq=komponentenDB.material.map(function(m){return m.bez;}).filter(function(v,i,a){return v&&a.indexOf(v)===i;});
   dl.innerHTML=uniq.map(function(v){return '<option value="'+htmlEsc(v)+'">';}).join('');
 }
-function addAbMatRow(d){
+function addAbMatRow(d,autosave){
   d=d||{};
   var wrap=document.getElementById('abMatRows');if(!wrap)return;
   var div=document.createElement('div');
@@ -4291,7 +4293,7 @@ function addAbMatRow(d){
     +'<input type="text" class="m-bez" list="dlAbMaterial" placeholder="Bezeichnung" value="'+(d.bez||'').replace(/"/g,'&quot;')+'" style="flex:1;min-width:0" onchange="queueBerichtDraft()">'
     +'<button type="button" class="btn dan" style="flex:0;padding:5px 8px;font-size:11px" onclick="this.closest(\'.mat-row\').remove();queueBerichtDraft()">✕</button>';
   wrap.appendChild(div);
-  queueBerichtDraft();
+  if(autosave!==false)queueBerichtDraft(); // autosave===false: programmatisches Laden, keine Nutzeränderung
 }
 function collectAbMaterial(){
   return Array.from(document.querySelectorAll('#abMatRows .mat-row')).map(function(r){
@@ -4421,6 +4423,7 @@ function deleteArbeitsbericht(i){
   saveData();renderBdBerichte();
 }
 function openBerichtForm(p){
+  isLoadingArbeitsbericht=true; // wird am Ende (nach Abschluss der gesamten, auch asynchronen, Initialisierung) wieder zurückgesetzt
   document.getElementById('bdBerichteListView').style.display='none';
   document.getElementById('berichtFormView').style.display='block';
   document.getElementById('berichtFormTitle').textContent=p?'Arbeitsbericht bearbeiten':'Neuer Arbeitsbericht';
@@ -4443,11 +4446,11 @@ function openBerichtForm(p){
   document.getElementById('abZeitAuto').checked=p?(p.zeitModus!=='manuell'):true;
   abZeitRows=(p&&p.zeiten)?JSON.parse(JSON.stringify(p.zeiten)):[];
   abToggleZeitMode();
-  if(document.getElementById('abZeitAuto').checked)refreshAbZeiten();
+  if(document.getElementById('abZeitAuto').checked)refreshAbZeiten(false);
   else renderAbZeitTable();
 
   document.getElementById('abPosRows').innerHTML='';
-  (p&&p.arbeiten&&p.arbeiten.length?p.arbeiten:[]).forEach(function(a){addAbPosRow(a);});
+  (p&&p.arbeiten&&p.arbeiten.length?p.arbeiten:[]).forEach(function(a){addAbPosRow(a,false);});
 
   abCurrentFotos=[];
   if(p&&p.fotoIds&&p.fotoIds.length){
@@ -4461,11 +4464,11 @@ function openBerichtForm(p){
   renderAbFotosList();
 
   document.getElementById('abMaengelRows').innerHTML='';
-  (p&&p.maengel&&p.maengel.length?p.maengel:[]).forEach(function(m){addAbMangelRow(m);});
+  (p&&p.maengel&&p.maengel.length?p.maengel:[]).forEach(function(m){addAbMangelRow(m,false);});
 
   fillDlAbMaterial();
   document.getElementById('abMatRows').innerHTML='';
-  (p&&p.material&&p.material.length?p.material:[]).forEach(function(m){addAbMatRow(m);});
+  (p&&p.material&&p.material.length?p.material:[]).forEach(function(m){addAbMatRow(m,false);});
 
   // ---- Unterschriften ----
   var u=(p&&p.unterschriften)||{};
@@ -4488,6 +4491,9 @@ function openBerichtForm(p){
   renderAbHistory(p);
 
   window.scrollTo(0,0);
+  // Guard erst freigeben, NACHDEM auch die asynchrone Signatur-Pad-Initialisierung (setTimeout 60ms in
+  // initAbSigPads) abgeschlossen ist — sonst könnte deren verzögerter Abschluss noch als Änderung zählen.
+  setTimeout(function(){isLoadingArbeitsbericht=false;},150);
 }
 function closeBerichtForm(){
   document.getElementById('berichtFormView').style.display='none';
@@ -4779,15 +4785,45 @@ function handleQuickArbeitsbericht(baustelle,datum,maIdx){
 function getLocalBerichtDraft(){
   try{return JSON.parse(localStorage.getItem('az_bericht_draft')||'null');}catch(e){return null;}
 }
+// Findet den zu einem Draft gehörenden gespeicherten Bericht stabil über die Berichts-ID (nicht über den
+// Array-Index, der sich durch unshift()/Löschen/Duplizieren verschieben kann).
+function findBerichtById(id){
+  if(id==null)return null;
+  var i=arbeitsberichte.findIndex(function(b){return String(b.id)===String(id);});
+  return i>=0?arbeitsberichte[i]:null;
+}
+// Vergleicht einen Draft-Inhalt mit einem gespeicherten Bericht anhand genau der Felder, die das Formular
+// tatsächlich bearbeitet (dieselbe Form wie buildBerichtFromForm() liefert). Bewusst ausgeschlossen sind
+// reine Buchhaltungsfelder wie updatedAt/history/contentHash/contentVersion, die sich bei jedem Speichern
+// ändern, ohne dass der Nutzer inhaltlich etwas geändert hätte.
+var AB_DRAFT_COMPARE_FIELDS=['baustelle','kunde','adresse','datum','status','mitarbeiterIds','zeitVon','zeitBis','zeitModus','zeiten','arbeitenText','arbeiten','fotoIds','fotoMeta','hinweise','maengel','material','unterschriften'];
+function abDraftMatchesSaved(draftP,savedP){
+  if(!draftP||!savedP)return false;
+  function pick(o){var r={};AB_DRAFT_COMPARE_FIELDS.forEach(function(f){r[f]=o[f];});return r;}
+  try{return JSON.stringify(pick(draftP))===JSON.stringify(pick(savedP));}catch(e){return false;}
+}
 function getBestBerichtDraft(){
   var l=getLocalBerichtDraft(),c=cloudBerichtDraft;
-  if(l&&l.p&&c&&c.p)return Number(c.t||0)>Number(l.t||0)?c:l;
-  return (c&&c.p)?c:((l&&l.p)?l:null);
+  var d;
+  if(l&&l.p&&c&&c.p)d=Number(c.t||0)>Number(l.t||0)?c:l;
+  else d=(c&&c.p)?c:((l&&l.p)?l:null);
+  if(!d)return null;
+  // Entwurf, der inhaltlich exakt dem bereits gespeicherten Bericht entspricht, ist kein "ungesichertes
+  // Entwurf" mehr (z.B. Rest eines Autosaves ohne echte Änderung) -> aufräumen statt Banner anzeigen.
+  if(d.berichtId!=null){
+    var saved=findBerichtById(d.berichtId);
+    if(saved&&abDraftMatchesSaved(d.p,saved)){
+      clearBerichtDraft();
+      return null;
+    }
+  }
+  return d;
 }
 function saveBerichtDraft(){
   var fv=document.getElementById('berichtFormView');
   if(!fv||fv.style.display==='none')return Promise.resolve(false);
-  var draft={idx:editingBerichtIdx,baustelle:currentBdBaustelle,p:buildBerichtFromForm(),t:Date.now(),device:navigator.userAgent||''};
+  var existingP=(editingBerichtIdx>=0&&arbeitsberichte[editingBerichtIdx])?arbeitsberichte[editingBerichtIdx]:null;
+  var draft={berichtId:existingP?existingP.id:null,idx:editingBerichtIdx,baustelle:currentBdBaustelle,p:buildBerichtFromForm(),t:Date.now(),device:navigator.userAgent||''};
   try{localStorage.setItem('az_bericht_draft',JSON.stringify(draft));}catch(e){}
   cloudBerichtDraft=draft;
   if(firebaseReady&&cloudSynced&&docRef){
@@ -4797,13 +4833,24 @@ function saveBerichtDraft(){
   }
   return Promise.resolve(false);
 }
-function queueBerichtDraft(){clearTimeout(berichtDraftTimer);berichtDraftTimer=setTimeout(saveBerichtDraft,1500);}
+function queueBerichtDraft(){
+  if(isLoadingArbeitsbericht)return; // reines Laden/Befüllen eines Formulars zählt nicht als Nutzeränderung
+  clearTimeout(berichtDraftTimer);berichtDraftTimer=setTimeout(saveBerichtDraft,1500);
+}
 function restoreBerichtDraft(){
   try{
     var d=getBestBerichtDraft();
     if(!d||!d.p){alert('Kein Entwurf vorhanden.');return;}
     if(d.baustelle)currentBdBaustelle=d.baustelle;
-    editingBerichtIdx=(typeof d.idx==='number'&&d.idx>=0&&d.idx<arbeitsberichte.length)?d.idx:-1;
+    if(d.berichtId!=null){
+      // Stabile Zuordnung über die Berichts-ID — funktioniert auch, wenn sich der Array-Index seit dem
+      // Anlegen des Drafts durch unshift()/Löschen/Duplizieren verschoben hat.
+      editingBerichtIdx=arbeitsberichte.findIndex(function(b){return String(b.id)===String(d.berichtId);});
+    }else{
+      // Kompatibilität: ältere Drafts (vor diesem Fix) haben noch keine berichtId und können nur über
+      // den ursprünglichen Index zugeordnet werden — bewusst nur als Fallback.
+      editingBerichtIdx=(typeof d.idx==='number'&&d.idx>=0&&d.idx<arbeitsberichte.length)?d.idx:-1;
+    }
     openBerichtForm(d.p);
   }catch(e){alert('Entwurf konnte nicht geladen werden.');}
 }
