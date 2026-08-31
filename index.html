@@ -147,10 +147,11 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
 .arb-pos-row textarea{flex:1;min-height:40px}
 .arb-pos-move{display:flex;flex-direction:column;gap:3px;flex-shrink:0}
 .arb-pos-move button{padding:2px 7px;font-size:11px}
-.abfoto-card{border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:10px;background:#fff}
+.abfoto-card{position:relative;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:10px;background:#fff}
 .abfoto-card img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#f5f5f5}
 .abfoto-card .abfoto-body{padding:8px 10px}
-.abfoto-card select,.abfoto-card input{font-size:12px;margin-bottom:5px}
+.abfoto-card select,.abfoto-card input,.abfoto-card textarea{font-size:12px;margin-bottom:5px}
+.abfoto-card textarea.abfoto-leistung{width:100%;min-height:44px;font-family:inherit}
 .abfoto-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:260px;overflow-y:auto;margin:8px 0}
 .abfoto-pick .pick-item{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:1/1;cursor:pointer;border:2px solid transparent}
 .abfoto-pick .pick-item img{width:100%;height:100%;object-fit:cover;display:block}
@@ -468,6 +469,7 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
 
         <div class="card">
           <div class="sec">Fotodokumentation der ausgeführten Arbeiten</div>
+          <div id="abAktZuordnungBox" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin-bottom:8px"></div>
           <div class="brow">
             <button type="button" class="btn inf" onclick="document.getElementById('abFotoCam').click()">📷 Foto aufnehmen</button>
             <button type="button" class="btn" onclick="document.getElementById('abFotoGal').click()">🖼 Galerie</button>
@@ -475,7 +477,16 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
           <input type="file" id="abFotoCam" accept="image/*" capture="environment" multiple style="display:none" onchange="handleAbFotos(this.files)">
           <input type="file" id="abFotoGal" accept="image/*" multiple style="display:none" onchange="handleAbFotos(this.files)">
           <button type="button" class="btn" style="width:100%;margin-top:8px" onclick="openAbFotoPicker()">🗂 Vorhandene Baustellenfotos auswählen</button>
+          <button type="button" class="btn" style="width:100%;margin-top:6px" onclick="abVerwalteStruktur()">🏗 Etage / Wohnung hinzufügen</button>
           <div id="abFotoStatus" style="font-size:12px;color:#888;margin-top:6px"></div>
+          <div id="abFotoAnalyseRow" style="margin-top:6px"></div>
+          <div id="abBulkBar" style="display:none;background:#eef2ff;border-radius:8px;padding:8px;margin-top:8px;font-size:12px;align-items:center;justify-content:space-between;gap:8px">
+            <span id="abBulkCount"></span>
+            <div style="display:flex;gap:6px">
+              <button type="button" class="btn pri" style="font-size:11px;padding:5px 9px" onclick="abBulkChangeZuordnung()">Zuordnung ändern</button>
+              <button type="button" class="btn" style="font-size:11px;padding:5px 9px" onclick="abClearFotoSelection()">Auswahl aufheben</button>
+            </div>
+          </div>
           <div id="abFotosList" style="margin-top:8px"></div>
         </div>
 
@@ -1384,6 +1395,14 @@ var ABERICHT_KATEGORIEN = [
 ];
 var ABERICHT_GESCHOSSE = ['UG / Keller','EG','Zwischengeschoss','1. OG','2. OG','3. OG','4. OG','5. OG','6. OG','7. OG','8. OG','9. OG','10. OG','Dachgeschoss','Dach','Außenbereich','Technikraum','Sonstiges']; // Standardliste; benutzerdefinierte Ergänzungen liegen dauerhaft in komponentenDB.geschosse
 var AB_GESCHOSS_NEU='__ab_geschoss_neu__'; // Sentinel-Wert der Dropdown-Option "+ Weitere Etage hinzufügen" — niemals ein echter Geschoss-Wert
+var AB_WOHNUNG_NEU='__ab_wohnung_neu__'; // Sentinel-Wert der Dropdown-Option "+ Neue Wohnung / Einheit hinzufügen"
+// Aktuelle Zuordnung für neu hochgeladene Fotos (intelligente Foto-Zuordnung / Massenupload) —
+// transiente Formular-Zustände, werden bei jedem openBerichtForm() zurückgesetzt.
+var abAktGeschoss='';
+var abAktWohnung='';
+var abZuordnungMerken=false;
+var abFotoSelected={}; // {index:true} — Mehrfachauswahl für Sammel-Zuordnungsänderung
+var abGroupSuggestion=null; // {geschoss,wohnung,text} — aktiver KI-Vorschlag für eine Geschoss/Wohnung-Gruppe (max. einer gleichzeitig)
 var ABERICHT_ARB_KATEGORIEN = ['Elektroinstallation','Kabelverlegung','Brandschutz','Montage','Demontage','Prüfung / Messung','Fehlersuche','Sonstiges'];
 var firma = {name:'',str:'',plz:''};
 var currentUser = null;
@@ -4175,6 +4194,10 @@ function handleAbFotos(files){
   var maIdx=maSel.length?maSel[0]:(isAG()?0:activeMaIdx());
   var st=document.getElementById('abFotoStatus');
   var total=files.length,done=0;
+  // Massenupload-Zuordnung (siehe "Aktuelle Zuordnung"): alle in diesem Batch hochgeladenen Fotos
+  // erhalten sofort die zuvor gewählte Etage + Wohnung/Einheit — zuverlässiger als reine KI-Erkennung
+  // (Regel lt. Vorgabe: Geschoss/Wohnung dürfen nicht aus dem Bild selbst erraten werden).
+  var zuordGeschoss=abAktGeschoss,zuordWohnung=abAktWohnung;
   if(st)st.textContent='⏳ 0 / '+total+' Foto(s) werden hochgeladen…';
   Array.from(files).forEach(function(file){
     if(!file.type.startsWith('image/')){done++;return;}
@@ -4182,9 +4205,14 @@ function handleAbFotos(files){
     reader.onload=function(e){
       var blob=new Blob([e.target.result],{type:file.type});
       uploadFoto(blob,baustelle,'Arbeitsbericht '+(document.getElementById('abDatum').value||''),maIdx,function(fotoObj){
-        abCurrentFotos.push({publicId:fotoObj.publicId,url:fotoObj.url,kategorie:'ausgefuehrt',beschreibung:'',datum:fotoObj.datum||todayStr(),geschoss:'',raum:'',bemerkung:''});
+        abCurrentFotos.push({publicId:fotoObj.publicId,url:fotoObj.url,kategorie:'ausgefuehrt',beschreibung:'',leistungsbeschreibung:'',datum:fotoObj.datum||todayStr(),geschoss:zuordGeschoss,wohnung:zuordWohnung,raum:'',bemerkung:'',aiSuggestion:null});
         done++;
-        if(st)st.textContent=done<total?('⏳ '+done+' / '+total+' Foto(s) werden hochgeladen…'):'✅ '+total+' Foto(s) hinzugefügt.';
+        if(done>=total){
+          var zuordLabel=[zuordGeschoss,zuordWohnung].filter(Boolean).join(' / ');
+          if(st)st.textContent=zuordLabel?('✅ '+total+' Foto(s) wurden „'+zuordLabel+'" zugeordnet.'):('✅ '+total+' Foto(s) hinzugefügt.');
+          if(!abZuordnungMerken){abAktGeschoss='';abAktWohnung='';renderAbAktZuordnung();}
+          renderAbFotoAnalyseRow();
+        }else if(st)st.textContent='⏳ '+done+' / '+total+' Foto(s) werden hochgeladen…';
         renderAbFotosList();queueBerichtDraft();
       });
     };
@@ -4194,49 +4222,274 @@ function handleAbFotos(files){
   document.getElementById('abFotoGal').value='';
 }
 // Liefert die vollständige, aktuell gültige Geschoss-Liste für ein Dropdown: Standardliste +
-// dauerhaft gespeicherte benutzerdefinierte Etagen (komponentenDB.geschosse) + — falls der aktuell
-// gespeicherte Wert dieses Fotos in keiner der beiden Listen vorkommt (z.B. ein alter Wert wie "Keller"
-// aus der Zeit vor dieser Erweiterung, oder ein Fremd-/Cloud-Wert eines anderen Geräts) — diesen Wert
-// zusätzlich, damit bereits gespeicherte Arbeitsberichte niemals ihren Geschoss-Wert verlieren oder
-// beim Öffnen fälschlich auf "kein Geschoss" zurückfallen.
+// dauerhaft gespeicherte benutzerdefinierte Etagen (komponentenDB.geschosse) + Etagen aus der optionalen
+// Projektstruktur der aktuellen Baustelle + — falls der aktuell gespeicherte Wert dieses Fotos in keiner
+// der Listen vorkommt (z.B. ein alter Wert wie "Keller" aus der Zeit vor dieser Erweiterung, oder ein
+// Fremd-/Cloud-Wert eines anderen Geräts) — diesen Wert zusätzlich, damit bereits gespeicherte
+// Arbeitsberichte niemals ihren Geschoss-Wert verlieren oder beim Öffnen fälschlich auf "kein Geschoss"
+// zurückfallen.
 function abAlleGeschosse(currentVal){
   var list=ABERICHT_GESCHOSSE.slice();
   var lower=list.map(function(g){return g.toLowerCase();});
   (komponentenDB.geschosse||[]).forEach(function(g){
     if(g&&lower.indexOf(g.toLowerCase())===-1){list.push(g);lower.push(g.toLowerCase());}
   });
+  getProjektStruktur(currentBdBaustelle).geschosse.forEach(function(g){
+    if(g.name&&lower.indexOf(g.name.toLowerCase())===-1){list.push(g.name);lower.push(g.name.toLowerCase());}
+  });
   if(currentVal&&lower.indexOf(currentVal.toLowerCase())===-1){list.push(currentVal);}
   return list;
 }
+// ---- Projektstruktur (Etagen + Wohnungen/Einheiten je Baustelle) ----
+// Optional pro Baustelle hinterlegt, liegt im bestehenden baustellen[]-Eintrag (Feld projektStruktur) und
+// wird dadurch automatisch über die bereits vorhandene Persistenz (saveLocal()/pushToCloud(), da diese
+// bereits das komplette baustellen[]-Array übertragen) in localStorage/Firestore mitsynchronisiert.
+function getOrCreateBaustelleObj(name){
+  var b=getBaustelleMeta(name);
+  if(b)return b;
+  b={name:name,adresse:'',kunde:'',dat:todayStr()};
+  baustellen.push(b);
+  return b;
+}
+function getProjektStruktur(name){
+  var b=getBaustelleMeta(name);
+  return (b&&b.projektStruktur&&Array.isArray(b.projektStruktur.geschosse))?b.projektStruktur:{geschosse:[]};
+}
+function findStrukturGeschoss(name,geschossName){
+  var gl=String(geschossName||'').trim().toLowerCase();
+  if(!gl)return null;
+  return getProjektStruktur(name).geschosse.filter(function(g){return (g.name||'').toLowerCase()===gl;})[0]||null;
+}
+function abEinheitenFuerGeschoss(baustelle,geschoss){
+  var g=findStrukturGeschoss(baustelle,geschoss);
+  return g?(g.einheiten||[]).slice():[];
+}
+// Liefert die für ein Dropdown gültige Wohnungs-/Einheiten-Liste: aus der Projektstruktur des gewählten
+// Geschosses + (Kompatibilität) der aktuelle Wert, falls er dort nicht enthalten ist.
+function abAlleWohnungen(geschoss,currentVal){
+  var list=abEinheitenFuerGeschoss(currentBdBaustelle,geschoss);
+  var lower=list.map(function(w){return w.toLowerCase();});
+  if(currentVal&&lower.indexOf(currentVal.toLowerCase())===-1){list.push(currentVal);}
+  return list;
+}
+function addStrukturGeschoss(name,geschossName){
+  geschossName=String(geschossName||'').trim();
+  if(!geschossName||!name)return null;
+  var b=getOrCreateBaustelleObj(name);
+  if(!b.projektStruktur||!Array.isArray(b.projektStruktur.geschosse))b.projektStruktur={geschosse:[]};
+  var existing=b.projektStruktur.geschosse.filter(function(g){return (g.name||'').toLowerCase()===geschossName.toLowerCase();})[0];
+  if(existing)return existing;
+  var g={name:geschossName,einheiten:[]};
+  b.projektStruktur.geschosse.push(g);
+  return g;
+}
+function addStrukturEinheit(name,geschossName,einheitName){
+  einheitName=String(einheitName||'').trim();
+  if(!einheitName)return null;
+  var g=addStrukturGeschoss(name,geschossName); // legt das Geschoss bei Bedarf gleich mit an
+  if(!g)return null;
+  var exists=(g.einheiten||[]).some(function(e){return e.toLowerCase()===einheitName.toLowerCase();});
+  if(!exists){g.einheiten=g.einheiten||[];g.einheiten.push(einheitName);}
+  return einheitName;
+}
+function removeStrukturEinheit(name,geschossName,einheitName){
+  var g=findStrukturGeschoss(name,geschossName);
+  if(!g)return;
+  g.einheiten=(g.einheiten||[]).filter(function(e){return e!==einheitName;});
+  saveData();
+}
+function removeStrukturGeschoss(name,geschossName){
+  var b=getBaustelleMeta(name);
+  if(!b||!b.projektStruktur)return;
+  var gl=String(geschossName||'').trim().toLowerCase();
+  b.projektStruktur.geschosse=(b.projektStruktur.geschosse||[]).filter(function(g){return (g.name||'').toLowerCase()!==gl;});
+  saveData();
+}
+// Sortierreihenfolge für Geschosse in Gruppierungen: Standardliste + bekannte Custom-Etagen zuerst
+// (in ihrer definierten Reihenfolge), unbekannte danach alphabetisch — sorgt z.B. dafür, dass "2. OG"
+// vor "10. OG" einsortiert wird statt alphabetisch dahinter.
+function abGeschossSortIndex(g){
+  var order=ABERICHT_GESCHOSSE.concat(komponentenDB.geschosse||[]);
+  var idx=order.indexOf(g);
+  return idx>=0?idx:9999;
+}
+// Button "🏗 Etage / Wohnung hinzufügen": ein kombinierter Dialog, mit dem für die aktuelle Baustelle
+// sowohl eine neue Etage als auch (optional gleich mit) eine neue Wohnung/Einheit angelegt werden kann.
+function abVerwalteStruktur(){
+  var baustelle=currentBdBaustelle;
+  if(!baustelle){alert('Keine Baustelle zugeordnet.');return;}
+  var vorhandene=getProjektStruktur(baustelle).geschosse.map(function(g){return g.name+' ('+(g.einheiten||[]).length+' Einheit(en))';});
+  var hinweis=vorhandene.length?('\n\nBereits vorhanden:\n'+vorhandene.join('\n')):'';
+  var geschossName=prompt('Etage für "'+baustelle+'" (z.B. "1. OG", neu oder bereits vorhanden):'+hinweis);
+  if(geschossName===null||!geschossName.trim())return;
+  geschossName=geschossName.trim();
+  var einheitName=prompt('Wohnung / Einheit für "'+geschossName+'" (z.B. "WE 1.1", "Treppenhaus") — leer lassen, um nur die Etage anzulegen:');
+  if(einheitName===null)return;
+  einheitName=einheitName.trim();
+  if(einheitName)addStrukturEinheit(baustelle,geschossName,einheitName);
+  else addStrukturGeschoss(baustelle,geschossName);
+  saveData();
+  renderAbAktZuordnung();
+  renderAbFotosList();
+  alert(einheitName?('✅ "'+geschossName+' / '+einheitName+'" wurde angelegt und steht ab sofort in den Dropdowns zur Verfügung.'):('✅ Etage "'+geschossName+'" wurde angelegt.'));
+}
+// ---- "Aktuelle Zuordnung" — Massenupload-Vorauswahl (Etage + Wohnung für neu hochgeladene Fotos) ----
+function renderAbAktZuordnung(){
+  var box=document.getElementById('abAktZuordnungBox');if(!box)return;
+  box.innerHTML='<div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:6px">📍 Aktuelle Zuordnung für neue Fotos</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<select onchange="abAktGeschossChange(this.value)" style="flex:1"><option value="">Etage (optional)</option>'
+    +abAlleGeschosse(abAktGeschoss).map(function(g){return '<option'+(abAktGeschoss===g?' selected':'')+'>'+htmlEsc(g)+'</option>';}).join('')
+    +'<option value="'+AB_GESCHOSS_NEU+'">+ Weitere Etage hinzufügen</option>'
+    +'</select>'
+    +'<select onchange="abAktWohnungChange(this.value)" style="flex:1"><option value="">Wohnung / Einheit (optional)</option>'
+    +abAlleWohnungen(abAktGeschoss,abAktWohnung).map(function(w){return '<option'+(abAktWohnung===w?' selected':'')+'>'+htmlEsc(w)+'</option>';}).join('')
+    +'<option value="'+AB_WOHNUNG_NEU+'">+ Neue Wohnung / Einheit hinzufügen</option>'
+    +'</select></div>'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;margin-top:6px">'
+    +'<input type="checkbox" id="abZuordnungMerkenChk"'+(abZuordnungMerken?' checked':'')+' onchange="abToggleZuordnungMerken(this.checked)"> Zuordnung merken (gilt für alle neu aufgenommenen Fotos, bis Etage oder Wohnung geändert wird)'
+    +'</label>';
+}
+function abAktGeschossChange(val){
+  if(val===AB_GESCHOSS_NEU){
+    var name=prompt('Neue Etage / neues Geschoss (z.B. "11. OG", "Penthouse", "Mezzanin"):');
+    if(name===null||!name.trim()){renderAbAktZuordnung();return;}
+    name=name.trim();
+    var vorhanden=abAlleGeschosse(null).filter(function(g){return g.toLowerCase()===name.toLowerCase();})[0];
+    if(vorhanden){name=vorhanden;}
+    else{if(!komponentenDB.geschosse)komponentenDB.geschosse=[];komponentenDB.geschosse.push(name);saveData();}
+    abAktGeschoss=name;abAktWohnung='';
+  }else{
+    abAktGeschoss=val;abAktWohnung='';
+  }
+  renderAbAktZuordnung();
+}
+function abAktWohnungChange(val){
+  if(val===AB_WOHNUNG_NEU){
+    if(!abAktGeschoss){alert('Bitte zuerst eine Etage auswählen.');renderAbAktZuordnung();return;}
+    var name=prompt('Neue Wohnung / Einheit für "'+abAktGeschoss+'" (z.B. "WE 2.1", "Treppenhaus"):');
+    if(name===null||!name.trim()){renderAbAktZuordnung();return;}
+    name=name.trim();
+    var vorhanden=abAlleWohnungen(abAktGeschoss,null).filter(function(w){return w.toLowerCase()===name.toLowerCase();})[0];
+    if(vorhanden){name=vorhanden;}
+    else{addStrukturEinheit(currentBdBaustelle,abAktGeschoss,name);saveData();}
+    abAktWohnung=name;
+  }else{
+    abAktWohnung=val;
+  }
+  renderAbAktZuordnung();
+}
+function abToggleZuordnungMerken(checked){abZuordnungMerken=!!checked;}
+
+function abGroupKey(geschoss,wohnung){return (geschoss||'')+'␟'+(wohnung||'');}
+// Generische Gruppierung (wird sowohl für die Bildschirmansicht als auch das PDF verwendet, damit beide
+// exakt dieselbe Reihenfolge/Logik anwenden).
+function abGroupByGeschossWohnung(items,getGeschoss,getWohnung){
+  var groups=[],map={};
+  items.forEach(function(item){
+    var g=getGeschoss(item)||'',w=getWohnung(item)||'';
+    var key=abGroupKey(g,w);
+    if(!map[key]){map[key]={geschoss:g,wohnung:w,items:[]};groups.push(map[key]);}
+    map[key].items.push(item);
+  });
+  groups.sort(function(a,b){
+    if(!a.geschoss&&!a.wohnung)return 1;
+    if(!b.geschoss&&!b.wohnung)return -1;
+    var ia=abGeschossSortIndex(a.geschoss),ib=abGeschossSortIndex(b.geschoss);
+    if(ia!==ib)return ia-ib;
+    var ga=a.geschoss.toLowerCase(),gb=b.geschoss.toLowerCase();
+    if(ga!==gb)return ga<gb?-1:1;
+    var wa=a.wohnung.toLowerCase(),wb=b.wohnung.toLowerCase();
+    return wa<wb?-1:(wa>wb?1:0);
+  });
+  return groups;
+}
+// ---- Fotoliste: gruppiert nach Etage → Wohnung/Einheit (Ansicht), einzelne Fotometadaten bleiben
+// innerhalb jeder Gruppe weiterhin bearbeitbar. Leere Überschriften werden nicht angezeigt — Fotos ohne
+// Zuordnung landen gesammelt unter "Nicht zugeordnet" am Ende. ----
 function renderAbFotosList(){
   var el=document.getElementById('abFotosList');if(!el)return;
+  renderAbFotoAnalyseRow();
+  updateAbBulkBar();
   if(!abCurrentFotos.length){el.innerHTML='<div style="color:#888;font-size:12px;padding:8px 0;text-align:center">Noch keine Fotos zu diesem Bericht hinzugefügt.</div>';return;}
-  el.innerHTML=abCurrentFotos.map(function(f,i){
-    var warn=!f.kategorie?'<div style="color:#b91c1c;font-size:11px;font-weight:600;margin-bottom:4px">⚠️ Bitte Kategorie wählen</div>':'';
-    return '<div class="abfoto-card"><img src="'+f.url+'" loading="lazy"><div class="abfoto-body">'
-      +warn
-      +'<select onchange="abFotoMetaChange('+i+',\'kategorie\',this.value)" style="width:100%">'
-      +'<option value="">– Kategorie wählen –</option>'
-      +ABERICHT_KATEGORIEN.map(function(k){return '<option value="'+k[0]+'"'+(f.kategorie===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')
-      +'</select>'
-      +'<input type="text" placeholder="Beschreibung" value="'+htmlEsc(f.beschreibung||'')+'" onchange="abFotoMetaChange('+i+',\'beschreibung\',this.value)" style="width:100%">'
-      +'<div style="display:flex;gap:6px">'
-      +'<select onchange="abGeschossSelectChange('+i+',this.value)" style="flex:1"><option value="">Geschoss</option>'
-      +abAlleGeschosse(f.geschoss).map(function(g){return '<option'+(f.geschoss===g?' selected':'')+'>'+htmlEsc(g)+'</option>';}).join('')
-      +'<option value="'+AB_GESCHOSS_NEU+'">+ Weitere Etage hinzufügen</option>'
-      +'</select>'
-      +'<input type="text" placeholder="Raum / Bereich" value="'+htmlEsc(f.raum||'')+'" onchange="abFotoMetaChange('+i+',\'raum\',this.value)" style="flex:1">'
+  var groups=abGroupByGeschossWohnung(
+    abCurrentFotos.map(function(f,i){return {f:f,i:i};}),
+    function(x){return x.f.geschoss;},
+    function(x){return x.f.wohnung;}
+  );
+  el.innerHTML=groups.map(function(grp){
+    var label=(grp.geschoss||grp.wohnung)?[grp.geschoss,grp.wohnung].filter(Boolean).join(' / '):'Nicht zugeordnet';
+    var sharedText=abGroupSharedLeistung(grp.geschoss,grp.wohnung);
+    var isSuggestionHere=abGroupSuggestion&&abGroupSuggestion.geschoss===grp.geschoss&&abGroupSuggestion.wohnung===grp.wohnung;
+    var groupActions=(grp.geschoss||grp.wohnung)?(
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">'
+      +(grp.items.length>1?'<button type="button" class="btn" style="font-size:11px;padding:4px 8px" onclick="abSummarizeGroup(\''+encodeURIComponent(grp.geschoss)+'\',\''+encodeURIComponent(grp.wohnung)+'\')">✨ Leistung aus Fotos zusammenfassen</button>':'')
+      +(sharedText&&!isSuggestionHere?'<button type="button" class="btn suc" style="font-size:11px;padding:4px 8px" onclick="abGroupUebernehmenAlsPosition(\''+encodeURIComponent(grp.geschoss)+'\',\''+encodeURIComponent(grp.wohnung)+'\')">Als Arbeitsposition übernehmen</button>':'')
       +'</div>'
-      +'<input type="date" value="'+(f.datum||'')+'" onchange="abFotoMetaChange('+i+',\'datum\',this.value)" style="width:100%">'
-      +'<input type="text" placeholder="Bemerkung (optional)" value="'+htmlEsc(f.bemerkung||'')+'" onchange="abFotoMetaChange('+i+',\'bemerkung\',this.value)" style="width:100%">'
-      +'<button type="button" class="btn dan" style="width:100%;margin-top:4px" onclick="removeAbFoto('+i+')">✕ Entfernen</button>'
-      +'</div></div>';
+    ):'';
+    var suggestionBox=isSuggestionHere?(
+      '<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px;margin-top:6px">'
+      +'<div style="font-weight:600;color:#6d28d9;font-size:12px;margin-bottom:4px">✨ KI-Vorschlag (Zusammenfassung)</div>'
+      +'<textarea style="width:100%;min-height:60px;font-size:12px" onchange="abGroupSuggestionTextChange(this.value)" oninput="abGroupSuggestionTextChange(this.value)">'+htmlEsc(abGroupSuggestion.text)+'</textarea>'
+      +'<div style="display:flex;gap:6px;margin-top:6px">'
+      +'<button type="button" class="btn suc" style="font-size:11px;padding:4px 8px" onclick="abApplyGroupSuggestion()">✓ Übernehmen</button>'
+      +'<button type="button" class="btn dan" style="font-size:11px;padding:4px 8px" onclick="abDiscardGroupSuggestion()">✕ Verwerfen</button>'
+      +'</div></div>'
+    ):'';
+    var sharedTextBox=(sharedText&&!isSuggestionHere)?('<div style="font-size:12px;color:#166534;background:#f0fdf4;border-radius:6px;padding:6px 8px;margin-top:6px">„'+htmlEsc(sharedText)+'"</div>'):'';
+    return '<div class="abfoto-group" style="margin-bottom:10px">'
+      +'<div style="font-weight:700;font-size:13px;color:#1e293b;background:#f1f5f9;padding:6px 8px;border-radius:6px">'+htmlEsc(label)+' <span style="font-weight:400;color:#888">('+grp.items.length+' Foto'+(grp.items.length===1?'':'s')+')</span></div>'
+      +groupActions+suggestionBox+sharedTextBox
+      +grp.items.map(function(x){return abFotoCardHtml(x.f,x.i);}).join('')
+      +'</div>';
   }).join('');
+}
+function abFotoCardHtml(f,i){
+  var warn=!f.kategorie?'<div style="color:#b91c1c;font-size:11px;font-weight:600;margin-bottom:4px">⚠️ Bitte Kategorie wählen</div>':'';
+  var ai=f.aiSuggestion;
+  var aiBox=ai?(
+    '<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px;margin-top:6px;font-size:12px">'
+    +'<div style="font-weight:600;color:#6d28d9;margin-bottom:4px">✨ KI-Vorschlag'+(ai.confidence?(' (Konfidenz '+Math.round(ai.confidence*100)+'%)'):'')+'</div>'
+    +(ai.kategorie?('<div>Kategorie: '+htmlEsc((ABERICHT_KATEGORIEN.filter(function(k){return k[0]===ai.kategorie;})[0]||['',ai.kategorie])[1])+'</div>'):'')
+    +(ai.raum?('<div>Bereich: '+htmlEsc(ai.raum)+'</div>'):'')
+    +(ai.leistungsbeschreibung?('<div>„'+htmlEsc(ai.leistungsbeschreibung)+'"</div>'):'')
+    +(!ai.kategorie&&!ai.raum&&!ai.leistungsbeschreibung?'<div style="color:#888">Keine verwertbaren Vorschläge erkannt.</div>':'')
+    +'<div style="display:flex;gap:6px;margin-top:6px">'
+    +'<button type="button" class="btn suc" style="font-size:11px;padding:4px 8px" onclick="abApplyAiSuggestion('+i+')">✓ Übernehmen</button>'
+    +'<button type="button" class="btn" style="font-size:11px;padding:4px 8px" onclick="abEditAiSuggestion('+i+')">✎ Bearbeiten</button>'
+    +'<button type="button" class="btn dan" style="font-size:11px;padding:4px 8px" onclick="abDiscardAiSuggestion('+i+')">✕ Verwerfen</button>'
+    +'</div></div>'
+  ):'';
+  return '<div class="abfoto-card" data-idx="'+i+'"><input type="checkbox" class="abfoto-select"'+(abFotoSelected[i]?' checked':'')+' onchange="abToggleFotoSelect('+i+',this.checked)" style="position:absolute;margin:6px;width:18px;height:18px"><img src="'+f.url+'" loading="lazy"><div class="abfoto-body">'
+    +warn
+    +'<select onchange="abFotoMetaChange('+i+',\'kategorie\',this.value)" style="width:100%">'
+    +'<option value="">– Kategorie wählen –</option>'
+    +ABERICHT_KATEGORIEN.map(function(k){return '<option value="'+k[0]+'"'+(f.kategorie===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')
+    +'</select>'
+    +'<input type="text" placeholder="Beschreibung" value="'+htmlEsc(f.beschreibung||'')+'" onchange="abFotoMetaChange('+i+',\'beschreibung\',this.value)" style="width:100%">'
+    +'<div style="display:flex;gap:6px">'
+    +'<select onchange="abGeschossSelectChange('+i+',this.value)" style="flex:1"><option value="">Geschoss</option>'
+    +abAlleGeschosse(f.geschoss).map(function(g){return '<option'+(f.geschoss===g?' selected':'')+'>'+htmlEsc(g)+'</option>';}).join('')
+    +'<option value="'+AB_GESCHOSS_NEU+'">+ Weitere Etage hinzufügen</option>'
+    +'</select>'
+    +'<select onchange="abWohnungSelectChange('+i+',this.value)" style="flex:1"><option value="">Wohnung / Einheit</option>'
+    +abAlleWohnungen(f.geschoss,f.wohnung).map(function(w){return '<option'+(f.wohnung===w?' selected':'')+'>'+htmlEsc(w)+'</option>';}).join('')
+    +'<option value="'+AB_WOHNUNG_NEU+'">+ Neue Wohnung / Einheit hinzufügen</option>'
+    +'</select>'
+    +'</div>'
+    +'<input type="text" placeholder="Raum / Bereich" value="'+htmlEsc(f.raum||'')+'" onchange="abFotoMetaChange('+i+',\'raum\',this.value)" style="width:100%">'
+    +'<textarea class="abfoto-leistung" placeholder="Leistungsbeschreibung (optional)" onchange="abFotoMetaChange('+i+',\'leistungsbeschreibung\',this.value)">'+htmlEsc(f.leistungsbeschreibung||'')+'</textarea>'
+    +'<input type="date" value="'+(f.datum||'')+'" onchange="abFotoMetaChange('+i+',\'datum\',this.value)" style="width:100%">'
+    +'<input type="text" placeholder="Bemerkung (optional)" value="'+htmlEsc(f.bemerkung||'')+'" onchange="abFotoMetaChange('+i+',\'bemerkung\',this.value)" style="width:100%">'
+    +'<button type="button" class="btn inf" style="width:100%;margin-top:4px" onclick="abAnalyzeFoto('+i+')">✨ Foto automatisch zuordnen</button>'
+    +aiBox
+    +'<button type="button" class="btn dan" style="width:100%;margin-top:4px" onclick="removeAbFoto('+i+')">✕ Entfernen</button>'
+    +'</div></div>';
 }
 function abFotoMetaChange(i,field,val){
   if(!abCurrentFotos[i])return;
   abCurrentFotos[i][field]=val;
-  if(field==='kategorie')renderAbFotosList();
+  if(field==='kategorie'||field==='geschoss'||field==='wohnung')renderAbFotosList();
   queueBerichtDraft();
 }
 // Sonderbehandlung für das Geschoss-Dropdown: bei Auswahl von "+ Weitere Etage hinzufügen" wird ein
@@ -4264,8 +4517,29 @@ function abAddNewGeschoss(i){
   renderAbFotosList();
   queueBerichtDraft();
 }
+// Analoge Sonderbehandlung für das neue Wohnung-/Einheiten-Dropdown.
+function abWohnungSelectChange(i,val){
+  if(val===AB_WOHNUNG_NEU){abAddNewWohnung(i);return;}
+  abFotoMetaChange(i,'wohnung',val);
+}
+function abAddNewWohnung(i){
+  var f=abCurrentFotos[i];
+  var geschoss=f&&f.geschoss;
+  if(!geschoss){alert('Bitte zuerst ein Geschoss für dieses Foto auswählen, bevor eine neue Wohnung/Einheit angelegt wird.');renderAbFotosList();return;}
+  var name=prompt('Neue Wohnung / Einheit für "'+geschoss+'" (z.B. "WE 2.1", "Wohnung links", "Treppenhaus"):');
+  if(name===null||!name.trim()){renderAbFotosList();return;}
+  name=name.trim();
+  var vorhanden=abAlleWohnungen(geschoss,null).filter(function(w){return w.toLowerCase()===name.toLowerCase();})[0];
+  if(vorhanden){name=vorhanden;}
+  else{addStrukturEinheit(currentBdBaustelle,geschoss,name);saveData();}
+  if(f)f.wohnung=name;
+  renderAbFotosList();
+  queueBerichtDraft();
+}
 function removeAbFoto(i){
-  abCurrentFotos.splice(i,1);renderAbFotosList();queueBerichtDraft();
+  abCurrentFotos.splice(i,1);
+  delete abFotoSelected[i];
+  renderAbFotosList();queueBerichtDraft();
 }
 function openAbFotoPicker(){
   var baustelle=document.getElementById('abBaustelle').value;
@@ -4290,11 +4564,209 @@ function closeAbFotoPicker(){
 function confirmAbFotoPick(){
   Object.keys(abFotoPickSel).forEach(function(id){
     var srcFoto=findFotoByPublicId(id);
-    abCurrentFotos.push({publicId:id,url:abFotoPickSel[id],kategorie:'',beschreibung:(srcFoto&&srcFoto.notiz)||'',datum:(srcFoto&&srcFoto.datum)||todayStr(),geschoss:'',raum:'',bemerkung:''});
+    abCurrentFotos.push({publicId:id,url:abFotoPickSel[id],kategorie:'',beschreibung:(srcFoto&&srcFoto.notiz)||'',leistungsbeschreibung:'',datum:(srcFoto&&srcFoto.datum)||todayStr(),geschoss:abAktGeschoss,wohnung:abAktWohnung,raum:'',bemerkung:'',aiSuggestion:null});
   });
   abFotoPickSel={};
   closeAbFotoPicker();
+  if(!abZuordnungMerken){abAktGeschoss='';abAktWohnung='';renderAbAktZuordnung();}
   renderAbFotosList();queueBerichtDraft();
+}
+// ---- Mehrfachauswahl + Sammel-Zuordnungsänderung ----
+function abToggleFotoSelect(i,checked){
+  if(checked)abFotoSelected[i]=true;else delete abFotoSelected[i];
+  updateAbBulkBar();
+}
+function abClearFotoSelection(){
+  abFotoSelected={};
+  renderAbFotosList();
+}
+function updateAbBulkBar(){
+  var bar=document.getElementById('abBulkBar');if(!bar)return;
+  var n=Object.keys(abFotoSelected).filter(function(k){return abFotoSelected[k];}).length;
+  if(n>0){
+    bar.style.display='flex';
+    var cnt=document.getElementById('abBulkCount');if(cnt)cnt.textContent=n+' Foto(s) ausgewählt';
+  }else{
+    bar.style.display='none';
+  }
+}
+function abBulkChangeZuordnung(){
+  var idxs=Object.keys(abFotoSelected).filter(function(k){return abFotoSelected[k];}).map(Number);
+  if(!idxs.length){alert('Bitte zuerst Fotos auswählen.');return;}
+  var geschoss=prompt('Neue Etage für '+idxs.length+' Foto(s) — leer lassen, um das Geschoss unverändert zu lassen:','');
+  if(geschoss===null)return;
+  geschoss=geschoss.trim();
+  var wohnung=prompt('Neue Wohnung/Einheit für '+idxs.length+' Foto(s) — leer lassen, um unverändert zu lassen:','');
+  if(wohnung===null)return;
+  wohnung=wohnung.trim();
+  var katLabel=prompt('Neue Kategorie für '+idxs.length+' Foto(s) — mögliche Werte: '+ABERICHT_KATEGORIEN.map(function(k){return k[1];}).join(', ')+' — leer lassen, um unverändert zu lassen:','');
+  if(katLabel===null)return;
+  katLabel=katLabel.trim();
+  var kategorie='';
+  if(katLabel){
+    var match=ABERICHT_KATEGORIEN.filter(function(k){return k[1].toLowerCase()===katLabel.toLowerCase();})[0];
+    if(match)kategorie=match[0];
+    else alert('Unbekannte Kategorie „'+katLabel+'" — die Kategorie wird bei den ausgewählten Fotos NICHT geändert.');
+  }
+  if(geschoss&&abAlleGeschosse(null).indexOf(geschoss)===-1&&!abAlleGeschosse(null).some(function(g){return g.toLowerCase()===geschoss.toLowerCase();})){
+    if(!komponentenDB.geschosse)komponentenDB.geschosse=[];
+    komponentenDB.geschosse.push(geschoss);
+  }
+  idxs.forEach(function(i){
+    var f=abCurrentFotos[i];if(!f)return;
+    if(geschoss)f.geschoss=geschoss;
+    if(wohnung){f.wohnung=wohnung;addStrukturEinheit(currentBdBaustelle,geschoss||f.geschoss,wohnung);}
+    if(kategorie)f.kategorie=kategorie;
+  });
+  saveData();
+  abFotoSelected={};
+  renderAbFotosList();queueBerichtDraft();
+  alert('Zuordnung auf '+idxs.length+' Foto(s) angewendet.');
+}
+// ---- Intelligente automatische Foto-Zuordnung (KI) ----
+// WICHTIGE REGEL: Die KI darf Geschoss/Wohnung NIEMALS aus dem Bildinhalt selbst erraten (nicht
+// zuverlässig erkennbar). Diese beiden Felder werden daher NIE an das Sprachmodell zur Erkennung
+// übergeben, sondern ausschließlich aus bereits vorhandenem, nicht-visuellem Kontext programmatisch
+// übernommen (bereits gesetzter Wert des Fotos, aktuelle Massenupload-Zuordnung, oder die zuletzt
+// zugeordnete Etage/Wohnung eines vorherigen Fotos). Nur Kategorie/Bereich/Leistungsbeschreibung werden
+// tatsächlich am Bildinhalt erkannt — und auch dort ausschließlich als PRÜFBARER VORSCHLAG, nie final
+// gespeichert, bis der Nutzer "Übernehmen" oder "Bearbeiten" klickt (siehe abApplyAiSuggestion).
+function abPrevFotoContext(i,field){
+  for(var j=i-1;j>=0;j--){if(abCurrentFotos[j]&&abCurrentFotos[j][field])return abCurrentFotos[j][field];}
+  return '';
+}
+function renderAbFotoAnalyseRow(){
+  var row=document.getElementById('abFotoAnalyseRow');if(!row)return;
+  if(!abCurrentFotos.length){row.innerHTML='';return;}
+  var label=abCurrentFotos.length===1?'✨ Foto automatisch zuordnen':'✨ Alle Fotos analysieren';
+  row.innerHTML='<button type="button" id="abAnalyseAlleBtn" class="btn" style="width:100%" onclick="abAnalyzeAlleFotos()">'+label+'</button>';
+}
+async function abAnalyzeFoto(i){
+  var f=abCurrentFotos[i];if(!f||!f.url)return;
+  try{
+    var imgData=await imgToDataURL(f.url,700);
+    if(!imgData){alert('Foto konnte nicht geladen werden.');return;}
+    var base64=imgData.data.split(',')[1];
+    var content=[
+      {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
+      {type:'text',text:'Du dokumentierst Elektro-/Handwerksarbeiten auf einer Baustelle. Betrachte AUSSCHLIESSLICH das sichtbare Foto.\n\n'
+        +'WICHTIGE REGEL: Erfinde NICHTS. Du weißt NICHT, in welcher Wohnung oder in welchem Geschoss das Foto aufgenommen wurde, wer die Arbeit ausgeführt hat, ob eine Prüfung erfolgreich war, oder genaue Maße/Messwerte — errate das NICHT. Gib "raum" nur an, falls am Foto tatsächlich erkennbar, um welche Art von Raum es sich handelt (z.B. "Technikraum", "Flur", "Verteilerraum") — sonst leer lassen.\n\n'
+        +'Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (kein Text davor/danach):\n'
+        +'{"kategorie":"","raum":"","leistungsbeschreibung":"","confidence":0}\n\n'
+        +'kategorie: einer von genau diesen Werten (oder leer, falls unklar): '+ABERICHT_KATEGORIEN.map(function(k){return k[0];}).join(', ')+'\n'
+        +'leistungsbeschreibung: EIN professioneller Satz, der ausschließlich die am Foto sichtbare Arbeit beschreibt (z.B. "Kabelkanal montiert und Leitungsführung darin hergestellt."). Keine Behauptung über Prüfung/Abnahme.\n'
+        +'confidence: Zahl zwischen 0 und 1, wie sicher du dir bei kategorie und leistungsbeschreibung bist.'}
+    ];
+    var resp=await fetch(CLOUDFLARE_WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:512,messages:[{role:'user',content:content}]})});
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    var data=await resp.json();
+    var txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+    var m=txt.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('Keine gültige KI-Antwort erhalten.');
+    var ai=JSON.parse(m[0]);
+    var ctxGeschoss=f.geschoss||abAktGeschoss||abPrevFotoContext(i,'geschoss')||'';
+    var ctxWohnung=f.wohnung||abAktWohnung||abPrevFotoContext(i,'wohnung')||'';
+    f.aiSuggestion={
+      geschoss:ctxGeschoss,wohnung:ctxWohnung,
+      raum:String(ai.raum||'').trim(),
+      kategorie:String(ai.kategorie||'').trim(),
+      leistungsbeschreibung:String(ai.leistungsbeschreibung||'').trim(),
+      confidence:Math.max(0,Math.min(1,Number(ai.confidence)||0))
+    };
+    renderAbFotosList();queueBerichtDraft();
+  }catch(e){
+    console.error('Foto-Analyse fehlgeschlagen:',e);
+    alert('Foto-Analyse fehlgeschlagen: '+(e.message||e));
+  }
+}
+async function abAnalyzeAlleFotos(){
+  if(!abCurrentFotos.length){alert('Keine Fotos vorhanden.');return;}
+  var btn=document.getElementById('abAnalyseAlleBtn');
+  var status=document.getElementById('abFotoStatus');
+  if(btn)btn.disabled=true;
+  for(var i=0;i<abCurrentFotos.length;i++){
+    if(status)status.textContent='🤖 Analysiere Foto '+(i+1)+' / '+abCurrentFotos.length+'…';
+    await abAnalyzeFoto(i);
+  }
+  if(status)status.textContent='✅ '+abCurrentFotos.length+' Foto(s) analysiert. Bitte Vorschläge prüfen.';
+  if(btn)btn.disabled=false;
+}
+function abApplyAiSuggestion(i,focusDesc){
+  var f=abCurrentFotos[i];if(!f||!f.aiSuggestion)return;
+  var s=f.aiSuggestion;
+  if(s.kategorie)f.kategorie=s.kategorie;
+  if(s.raum)f.raum=s.raum;
+  if(s.leistungsbeschreibung)f.leistungsbeschreibung=s.leistungsbeschreibung;
+  if(s.geschoss&&!f.geschoss)f.geschoss=s.geschoss;
+  if(s.wohnung&&!f.wohnung)f.wohnung=s.wohnung;
+  f.aiSuggestion=null;
+  renderAbFotosList();
+  queueBerichtDraft();
+}
+function abEditAiSuggestion(i){abApplyAiSuggestion(i);}
+function abDiscardAiSuggestion(i){
+  var f=abCurrentFotos[i];if(!f)return;
+  f.aiSuggestion=null;renderAbFotosList();queueBerichtDraft();
+}
+// ---- Leistung aus mehreren Fotos einer Etage/Wohnung zusammenfassen ----
+function abGroupSharedLeistung(geschoss,wohnung){
+  var gr=abCurrentFotos.filter(function(f){return (f.geschoss||'')===(geschoss||'')&&(f.wohnung||'')===(wohnung||'');});
+  if(!gr.length)return '';
+  var first=gr[0].leistungsbeschreibung||'';
+  if(!first)return '';
+  var allSame=gr.every(function(f){return (f.leistungsbeschreibung||'')===first;});
+  return allSame?first:'';
+}
+async function abSummarizeGroup(geschossEnc,wohnungEnc){
+  var geschoss=decodeURIComponent(geschossEnc),wohnung=decodeURIComponent(wohnungEnc);
+  var gr=abCurrentFotos.filter(function(f){return (f.geschoss||'')===geschoss&&(f.wohnung||'')===wohnung;});
+  if(!gr.length){alert('Keine Fotos in dieser Gruppe.');return;}
+  try{
+    var content=[];
+    for(var i=0;i<Math.min(gr.length,8);i++){ // Bild-Obergrenze aus Performance-/Kostengründen
+      var imgData=await imgToDataURL(gr[i].url,500);
+      if(imgData)content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:imgData.data.split(',')[1]}});
+    }
+    var kontext=gr.map(function(f,i){return (i+1)+'. '+([f.kategorie&&(ABERICHT_KATEGORIEN.filter(function(k){return k[0]===f.kategorie;})[0]||['',f.kategorie])[1],f.beschreibung,f.leistungsbeschreibung].filter(Boolean).join(' – ')||'(ohne Beschreibung)');}).join('\n');
+    content.push({type:'text',text:'Du dokumentierst Elektro-/Handwerksarbeiten auf einer Baustelle. Diese '+gr.length+' Fotos gehören zu: '+([geschoss,wohnung].filter(Boolean).join(' / ')||'(ohne Zuordnung)')+'.\n\n'
+      +'Vorhandene Notizen zu den Fotos:\n'+(kontext||'(keine)')+'\n\n'
+      +'WICHTIGE REGEL: Erfinde NICHTS. Fasse AUSSCHLIESSLICH die an den Fotos sichtbaren bzw. bereits notierten Arbeiten in einem kurzen, professionellen Absatz für einen Arbeitsbericht zusammen (2-4 Sätze). Keine Behauptung über Prüfung/Abnahme, keine Mengen/Maße, die nicht genannt wurden.\n\n'
+      +'Antworte NUR mit dem Fließtext, ohne Anführungszeichen, ohne Einleitung.'});
+    var resp=await fetch(CLOUDFLARE_WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:512,messages:[{role:'user',content:content}]})});
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    var data=await resp.json();
+    var out=(data.content&&data.content[0]&&data.content[0].text)?data.content[0].text.trim():'';
+    if(!out){alert('Keine Antwort erhalten.');return;}
+    abGroupSuggestion={geschoss:geschoss,wohnung:wohnung,text:out};
+    renderAbFotosList();
+  }catch(e){
+    console.error('Gruppen-Zusammenfassung fehlgeschlagen:',e);
+    alert('Zusammenfassung fehlgeschlagen: '+(e.message||e));
+  }
+}
+function abGroupSuggestionTextChange(val){if(abGroupSuggestion)abGroupSuggestion.text=val;}
+function abApplyGroupSuggestion(){
+  if(!abGroupSuggestion)return;
+  var text=abGroupSuggestion.text.trim();
+  if(!text){alert('Text darf nicht leer sein.');return;}
+  var geschoss=abGroupSuggestion.geschoss,wohnung=abGroupSuggestion.wohnung;
+  abCurrentFotos.forEach(function(f){
+    if((f.geschoss||'')===geschoss&&(f.wohnung||'')===wohnung)f.leistungsbeschreibung=text;
+  });
+  abGroupSuggestion=null;
+  renderAbFotosList();queueBerichtDraft();
+}
+function abDiscardGroupSuggestion(){abGroupSuggestion=null;renderAbFotosList();}
+function abGroupUebernehmenAlsPosition(geschossEnc,wohnungEnc){
+  var geschoss=decodeURIComponent(geschossEnc),wohnung=decodeURIComponent(wohnungEnc);
+  var text=abGroupSharedLeistung(geschoss,wohnung);
+  if(!text){alert('Bitte zuerst eine gemeinsame Leistungsbeschreibung für diese Gruppe festlegen (z.B. über "✨ Leistung aus Fotos zusammenfassen").');return;}
+  var label=[geschoss,wohnung].filter(Boolean).join(' / ');
+  addAbPosRow({kategorie:'',text:(label?label+': ':'')+text});
+  queueBerichtDraft();
+  alert('Als Arbeitsposition übernommen.');
 }
 
 // ---- Festgestellte Mängel ----
@@ -4497,14 +4969,19 @@ function openBerichtForm(p){
   (p&&p.arbeiten&&p.arbeiten.length?p.arbeiten:[]).forEach(function(a){addAbPosRow(a,false);});
 
   abCurrentFotos=[];
+  // Massenupload-/Auswahl-Zustand für die Fotodokumentation ist pro Formularaufruf transient und wird
+  // beim (Wieder-)Öffnen zurückgesetzt — bestehende, bereits gespeicherte Foto-Zuordnungen sind davon
+  // unberührt (die stehen in fotoMeta und werden unten unverändert wiederhergestellt).
+  abAktGeschoss='';abAktWohnung='';abZuordnungMerken=false;abFotoSelected={};abGroupSuggestion=null;
   if(p&&p.fotoIds&&p.fotoIds.length){
     var meta2=p.fotoMeta||{};
     p.fotoIds.forEach(function(id){
       var f=findFotoByPublicId(id);
       var m=meta2[id]||{};
-      abCurrentFotos.push({publicId:id,url:(f&&f.url)||m.url||'',kategorie:m.kategorie||'',beschreibung:m.beschreibung||'',datum:m.datum||(f&&f.datum)||'',geschoss:m.geschoss||'',raum:m.raum||'',bemerkung:m.bemerkung||''});
+      abCurrentFotos.push({publicId:id,url:(f&&f.url)||m.url||'',kategorie:m.kategorie||'',beschreibung:m.beschreibung||'',leistungsbeschreibung:m.leistungsbeschreibung||'',datum:m.datum||(f&&f.datum)||'',geschoss:m.geschoss||'',wohnung:m.wohnung||'',raum:m.raum||'',bemerkung:m.bemerkung||'',aiSuggestion:m.aiSuggestion||null});
     });
   }
+  renderAbAktZuordnung();
   renderAbFotosList();
 
   document.getElementById('abMaengelRows').innerHTML='';
@@ -4548,7 +5025,7 @@ function buildBerichtFromForm(){
   var fotoIds=[],fotoMeta={};
   abCurrentFotos.forEach(function(f){
     fotoIds.push(f.publicId);
-    fotoMeta[f.publicId]={kategorie:f.kategorie||'',beschreibung:f.beschreibung||'',datum:f.datum||'',geschoss:f.geschoss||'',raum:f.raum||'',bemerkung:f.bemerkung||''};
+    fotoMeta[f.publicId]={kategorie:f.kategorie||'',beschreibung:f.beschreibung||'',leistungsbeschreibung:f.leistungsbeschreibung||'',datum:f.datum||'',geschoss:f.geschoss||'',wohnung:f.wohnung||'',raum:f.raum||'',bemerkung:f.bemerkung||'',aiSuggestion:f.aiSuggestion||null};
   });
   return {
     baustelle:document.getElementById('abBaustelle').value,
@@ -5049,25 +5526,52 @@ function buildArbeitsberichtPDF(p,fotoRecs,imgs){
   }
   if(okImgs.length){
     var iw=(PW-2*M-6)/2;
-    for(var i=0;i<okImgs.length;i+=2){
-      var a=okImgs[i],b=okImgs[i+1];
-      var ih1=a.img.h*iw/a.img.w;
-      var ih2=b?b.img.h*iw/b.img.w:0;
-      var rowH=Math.min(70,Math.max(ih1,ih2));
-      nl(rowH+16);
-      try{doc.addImage(a.img.data,'JPEG',M,y,iw,Math.min(70,ih1));}catch(e){}
-      doc.setFontSize(7);doc.setTextColor(90,90,90);
-      doc.text('Abb. '+(i+1)+' – '+pdfSafe(a.rec.meta.beschreibung||'ohne Beschreibung'),M,y+Math.min(70,ih1)+3);
-      doc.text('Bereich: '+pdfSafe([a.rec.meta.geschoss,a.rec.meta.raum].filter(Boolean).join(' / ')||'—'),M,y+Math.min(70,ih1)+6.5);
-      doc.text('Datum: '+(fmtDateDE(a.rec.meta.datum)||'—'),M,y+Math.min(70,ih1)+10);
-      if(b){
-        try{doc.addImage(b.img.data,'JPEG',M+iw+6,y,iw,Math.min(70,ih2));}catch(e){}
-        doc.text('Abb. '+(i+2)+' – '+pdfSafe(b.rec.meta.beschreibung||'ohne Beschreibung'),M+iw+6,y+Math.min(70,ih2)+3);
-        doc.text('Bereich: '+pdfSafe([b.rec.meta.geschoss,b.rec.meta.raum].filter(Boolean).join(' / ')||'—'),M+iw+6,y+Math.min(70,ih2)+6.5);
-        doc.text('Datum: '+(fmtDateDE(b.rec.meta.datum)||'—'),M+iw+6,y+Math.min(70,ih2)+10);
+    var abbNr=0;
+    // Gruppierung nach Geschoss -> Wohnung/Einheit (dieselbe Logik/Reihenfolge wie in der Bildschirmansicht,
+    // siehe abGroupByGeschossWohnung). Gruppen ohne Geschoss/Wohnung bekommen bewusst KEINE Überschrift
+    // (Kompatibilität mit bestehenden Berichten ohne diese Zuordnung — "keine leeren Überschriften").
+    var pdfGroups=abGroupByGeschossWohnung(okImgs,function(o){return o.rec.meta.geschoss;},function(o){return o.rec.meta.wohnung;});
+    pdfGroups.forEach(function(grp){
+      if(grp.geschoss||grp.wohnung){
+        nl(12);
+        doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(17,17,17);
+        doc.text(pdfSafe(grp.geschoss||'—'),M,y);y+=4.6;
+        if(grp.wohnung){
+          doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(60,60,60);
+          doc.text(pdfSafe(grp.wohnung),M+3,y);y+=4.4;
+        }
+        // Leistungsbeschreibung nur, wenn ALLE Fotos dieser Gruppe denselben, tatsächlich gesetzten Text
+        // tragen (z.B. per "Leistung aus Fotos zusammenfassen" übernommen) — nichts wird hier zusammengefasst
+        // oder erfunden, es wird nur angezeigt, was der Nutzer bereits explizit bestätigt hat.
+        var sharedText=grp.items[0]&&grp.items[0].rec.meta.leistungsbeschreibung;
+        if(sharedText&&grp.items.every(function(it){return it.rec.meta.leistungsbeschreibung===sharedText;})){
+          doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(40,40,40);
+          var lt=doc.splitTextToSize('Leistungsbeschreibung: '+pdfSafe(sharedText),PW-2*M);
+          nl(lt.length*3.6+3);
+          doc.text(lt,M,y);y+=lt.length*3.6+3;
+        }
+        y+=1;
       }
-      y+=rowH+13;
-    }
+      for(var i=0;i<grp.items.length;i+=2){
+        var a=grp.items[i],b=grp.items[i+1];
+        var ih1=a.img.h*iw/a.img.w;
+        var ih2=b?b.img.h*iw/b.img.w:0;
+        var rowH=Math.min(70,Math.max(ih1,ih2));
+        nl(rowH+16);
+        try{doc.addImage(a.img.data,'JPEG',M,y,iw,Math.min(70,ih1));}catch(e){}
+        doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(90,90,90);
+        doc.text('Abb. '+(++abbNr)+' – '+pdfSafe(a.rec.meta.beschreibung||'ohne Beschreibung'),M,y+Math.min(70,ih1)+3);
+        doc.text('Bereich: '+pdfSafe([a.rec.meta.geschoss,a.rec.meta.wohnung,a.rec.meta.raum].filter(Boolean).join(' / ')||'—'),M,y+Math.min(70,ih1)+6.5);
+        doc.text('Datum: '+(fmtDateDE(a.rec.meta.datum)||'—'),M,y+Math.min(70,ih1)+10);
+        if(b){
+          try{doc.addImage(b.img.data,'JPEG',M+iw+6,y,iw,Math.min(70,ih2));}catch(e){}
+          doc.text('Abb. '+(++abbNr)+' – '+pdfSafe(b.rec.meta.beschreibung||'ohne Beschreibung'),M+iw+6,y+Math.min(70,ih2)+3);
+          doc.text('Bereich: '+pdfSafe([b.rec.meta.geschoss,b.rec.meta.wohnung,b.rec.meta.raum].filter(Boolean).join(' / ')||'—'),M+iw+6,y+Math.min(70,ih2)+6.5);
+          doc.text('Datum: '+(fmtDateDE(b.rec.meta.datum)||'—'),M+iw+6,y+Math.min(70,ih2)+10);
+        }
+        y+=rowH+13;
+      }
+    });
   }else{
     doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(120,120,120);
     doc.text('Keine Fotos zu diesem Arbeitsbericht hinzugefügt.',M,y);y+=6;
