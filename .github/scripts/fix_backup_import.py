@@ -15,6 +15,15 @@ if old_import_ui in text:
 elif 'label for="importFile" class="btn"' not in text:
     raise SystemExit('Import-UI nicht gefunden')
 
+# Safari/iPad füllt das Baustellen-Suchfeld gelegentlich mit einer gespeicherten E-Mail-Adresse.
+# Autofill deaktivieren und irrtümlich eingesetzte E-Mail-Werte beim Fokus/Öffnen entfernen.
+old_project_search = '<div class="search-wrap"><input type="search" id="projectSearch" placeholder="Baustelle, Adresse oder Kunde suchen …" oninput="renderProjectDashboard()"></div>'
+new_project_search = '<div class="search-wrap"><input type="search" id="projectSearch" name="project-search-no-autofill" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Baustelle, Adresse oder Kunde suchen …" onfocus="if(this.value.indexOf(\'@\')>=0){this.value=\'\';renderProjectDashboard();}" oninput="renderProjectDashboard()"></div>'
+if old_project_search in text:
+    text = text.replace(old_project_search, new_project_search, 1)
+elif 'name="project-search-no-autofill"' not in text:
+    raise SystemExit('Baustellen-Suchfeld nicht gefunden')
+
 new_section = r'''// ============ BACKUP / IMPORT ============
 function exportBackup(){
   var data={
@@ -111,6 +120,14 @@ if old_hours in patched:
 elif 'function berichtZeitStunden(r)' not in patched:
     raise SystemExit('berichtStunden-Funktion nicht gefunden')
 
+# Beim Öffnen des Baustellen-Tabs Suchfeld leeren, damit kein alter/automatisch gefüllter Wert hängen bleibt.
+old_goto = "if(id==='baustellen')renderProjectDashboard();"
+new_goto = "if(id==='baustellen'){var ps=document.getElementById('projectSearch');if(ps)ps.value='';renderProjectDashboard();}"
+if old_goto in patched:
+    patched = patched.replace(old_goto, new_goto, 1)
+elif new_goto not in patched:
+    raise SystemExit('gotoTab-Baustellenlogik nicht gefunden')
+
 p.write_text(patched, encoding='utf-8')
 
 check = p.read_text(encoding='utf-8')
@@ -126,8 +143,11 @@ required = [
     'if(Array.isArray(data.baustellen))baustellen=data.baustellen;',
     'if(Array.isArray(data.protokolle))protokolle=data.protokolle;',
     'function berichtZeitStunden(r)',
+    'name="project-search-no-autofill"',
+    "if(this.value.indexOf('@')>=0)",
+    "if(id==='baustellen'){var ps=document.getElementById('projectSearch');if(ps)ps.value='';renderProjectDashboard();}",
 ]
 missing = [x for x in required if x not in check]
 if missing:
     raise SystemExit('Prüfung fehlgeschlagen: ' + ', '.join(missing))
-print('Backup Import/Export, iOS-Dateiauswahl und minutengenaue Berichtsstunden erfolgreich gepatcht.')
+print('Backup Import/Export, iOS-Dateiauswahl, Baustellen-Suche und minutengenaue Berichtsstunden erfolgreich gepatcht.')
