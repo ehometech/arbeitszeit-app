@@ -4,6 +4,17 @@ import re
 p = Path('index.html')
 text = p.read_text(encoding='utf-8')
 
+# iOS/iPadOS: verstecktes file-input mit programmatic .click() ist in Web-Apps/PWAs unzuverlässig.
+# Deshalb echten <label for="importFile"> Trigger verwenden und das Input nur optisch ausblenden.
+old_import_ui = '''        <button class="btn" onclick="document.getElementById('importFile').click()">⬆ Import</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)">'''
+new_import_ui = '''        <label for="importFile" class="btn" style="cursor:pointer">⬆ Import</label>
+        <input type="file" id="importFile" accept="application/json,.json" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap" onchange="importBackup(event)">'''
+if old_import_ui in text:
+    text = text.replace(old_import_ui, new_import_ui, 1)
+elif 'label for="importFile" class="btn"' not in text:
+    raise SystemExit('Import-UI nicht gefunden')
+
 new_section = r'''// ============ BACKUP / IMPORT ============
 function exportBackup(){
   var data={
@@ -29,7 +40,8 @@ function exportBackup(){
   URL.revokeObjectURL(a.href);
 }
 function importBackup(event){
-  var file=event.target.files[0];
+  var input=event&&event.target;
+  var file=input&&input.files&&input.files[0];
   if(!file)return;
   var reader=new FileReader();
   reader.onload=function(e){
@@ -46,18 +58,27 @@ function importBackup(event){
       if(data.komponentenDB&&typeof data.komponentenDB==='object')komponentenDB=data.komponentenDB;
       if(Array.isArray(data.arbeitsberichte))arbeitsberichte=data.arbeitsberichte;
       if(Array.isArray(data.dokumente))dokumente=data.dokumente;
-      Promise.resolve(saveData()).then(function(){
+      // Sofort lokal sichern. Cloud-Sync läuft danach; das verhindert Datenverlust bei langsamer Verbindung.
+      saveLocal();
+      Promise.resolve(pushToCloud()).then(function(){
+        if(input)input.value='';
         alert('Backup erfolgreich importiert.');
         location.reload();
       }).catch(function(err){
         console.warn('Cloud-Speichern nach Import fehlgeschlagen:',err);
+        if(input)input.value='';
         alert('Backup lokal importiert. Cloud-Synchronisierung wird erneut versucht.');
         location.reload();
       });
     }catch(err){
       console.error('Backup-Import fehlgeschlagen:',err);
+      if(input)input.value='';
       alert('Ungültige Backup-Datei');
     }
+  };
+  reader.onerror=function(){
+    if(input)input.value='';
+    alert('Backup-Datei konnte nicht gelesen werden.');
   };
   reader.readAsText(file);
 }
@@ -94,6 +115,10 @@ p.write_text(patched, encoding='utf-8')
 
 check = p.read_text(encoding='utf-8')
 required = [
+    'label for="importFile" class="btn"',
+    'accept="application/json,.json"',
+    'function importBackup(event)',
+    "if(input)input.value='';",
     'arbeitsberichte:arbeitsberichte',
     'komponentenDB:komponentenDB',
     'dokumente:dokumente',
@@ -105,4 +130,4 @@ required = [
 missing = [x for x in required if x not in check]
 if missing:
     raise SystemExit('Prüfung fehlgeschlagen: ' + ', '.join(missing))
-print('Backup Import/Export und minutengenaue Berichtsstunden erfolgreich gepatcht.')
+print('Backup Import/Export, iOS-Dateiauswahl und minutengenaue Berichtsstunden erfolgreich gepatcht.')
