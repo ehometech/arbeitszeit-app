@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/fix-backup-import.yml'
+      - '.github/scripts/fix_backup_import.py'
   workflow_dispatch:
 
 permissions:
@@ -13,113 +14,13 @@ jobs:
   patch:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Patch backup import/export
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          p = Path('index.html')
-          text = p.read_text(encoding='utf-8')
-
-          new_section = r'''// ============ BACKUP / IMPORT ============
-function exportBackup(){
-  var data={
-    APP_PIN:APP_PIN,
-    employees:employees,
-    entries:entries,
-    fotos:fotos,
-    firma:firma,
-    baustellen:baustellen,
-    timers:timers,
-    protokolle:protokolle,
-    komponentenDB:komponentenDB,
-    arbeitsberichte:arbeitsberichte,
-    dokumente:dokumente,
-    exportedAt:new Date().toISOString(),
-    version:15
-  };
-  var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='arbeitszeit-backup.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-function importBackup(event){
-  var file=event.target.files[0];
-  if(!file)return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    try{
-      var data=JSON.parse(e.target.result);
-
-      // Nur vorhandene Felder übernehmen, damit alte Backups
-      // keine neueren Datenbereiche versehentlich leeren.
-      if(data.APP_PIN)APP_PIN=data.APP_PIN;
-      if(Array.isArray(data.employees))employees=data.employees;
-      if(Array.isArray(data.entries))entries=data.entries;
-      if(Array.isArray(data.fotos))fotos=data.fotos;
-      if(data.firma&&typeof data.firma==='object')firma=data.firma;
-      if(Array.isArray(data.baustellen))baustellen=data.baustellen;
-      if(data.timers&&typeof data.timers==='object')timers=data.timers;
-      if(Array.isArray(data.protokolle))protokolle=data.protokolle;
-      if(data.komponentenDB&&typeof data.komponentenDB==='object')komponentenDB=data.komponentenDB;
-      if(Array.isArray(data.arbeitsberichte))arbeitsberichte=data.arbeitsberichte;
-      if(Array.isArray(data.dokumente))dokumente=data.dokumente;
-
-      Promise.resolve(saveData()).then(function(){
-        alert('Backup erfolgreich importiert.');
-        location.reload();
-      }).catch(function(err){
-        console.warn('Cloud-Speichern nach Import fehlgeschlagen:',err);
-        alert('Backup lokal importiert. Cloud-Synchronisierung wird erneut versucht.');
-        location.reload();
-      });
-    }catch(err){
-      console.error('Backup-Import fehlgeschlagen:',err);
-      alert('Ungültige Backup-Datei');
-    }
-  };
-  reader.readAsText(file);
-}
-
-// ============ PDF / CSV EXPORT ============'''
-
-          pattern = re.compile(
-              r'// ============ BACKUP / IMPORT ============.*?// ============ PDF / CSV EXPORT ============',
-              re.S
-          )
-          patched, count = pattern.subn(lambda m: new_section, text, count=1)
-          if count != 1:
-              raise SystemExit(f'Backup-Bereich nicht eindeutig gefunden: {count}')
-
-          p.write_text(patched, encoding='utf-8')
-
-          check = p.read_text(encoding='utf-8')
-          required = [
-              'arbeitsberichte:arbeitsberichte',
-              'komponentenDB:komponentenDB',
-              'dokumente:dokumente',
-              'if(Array.isArray(data.arbeitsberichte))arbeitsberichte=data.arbeitsberichte;',
-              'if(Array.isArray(data.baustellen))baustellen=data.baustellen;',
-              'if(Array.isArray(data.protokolle))protokolle=data.protokolle;'
-          ]
-          missing = [x for x in required if x not in check]
-          if missing:
-              raise SystemExit('Prüfung fehlgeschlagen: ' + ', '.join(missing))
-          print('Backup Import/Export erfolgreich gepatcht.')
-          PY
-
-      - name: Commit change
-        shell: bash
+      - uses: actions/checkout@v4
+      - name: Patch index.html
+        run: python .github/scripts/fix_backup_import.py
+      - name: Commit patched app
         run: |
           if git diff --quiet -- index.html; then
-            echo "Keine Änderung notwendig."
+            echo "No change needed"
             exit 0
           fi
           git config user.name "github-actions[bot]"
