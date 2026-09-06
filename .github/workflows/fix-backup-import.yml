@@ -17,8 +17,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Patch backup import/export
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
           import re
 
@@ -93,13 +94,12 @@ function importBackup(event){
               r'// ============ BACKUP / IMPORT ============.*?// ============ PDF / CSV EXPORT ============',
               re.S
           )
-          patched, count = pattern.subn(new_section, text, count=1)
+          patched, count = pattern.subn(lambda m: new_section, text, count=1)
           if count != 1:
               raise SystemExit(f'Backup-Bereich nicht eindeutig gefunden: {count}')
 
           p.write_text(patched, encoding='utf-8')
 
-          # Sicherheitsprüfungen
           check = p.read_text(encoding='utf-8')
           required = [
               'arbeitsberichte:arbeitsberichte',
@@ -113,8 +113,10 @@ function importBackup(event){
           if missing:
               raise SystemExit('Prüfung fehlgeschlagen: ' + ', '.join(missing))
           print('Backup Import/Export erfolgreich gepatcht.')
+          PY
 
       - name: Commit change
+        shell: bash
         run: |
           if git diff --quiet -- index.html; then
             echo "Keine Änderung notwendig."
