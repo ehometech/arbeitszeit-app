@@ -1285,8 +1285,8 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
       <div class="sec">Datenverwaltung</div>
       <div class="brow">
         <button class="btn" onclick="exportBackup()">⬇ Backup</button>
-        <button class="btn" onclick="document.getElementById('importFile').click()">⬆ Import</button>
-        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)">
+        <label for="importFile" class="btn" style="cursor:pointer">⬆ Import</label>
+        <input type="file" id="importFile" accept="application/json,.json" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap" onchange="importBackup(event)">
       </div>
       <button class="btn dan" style="width:100%;margin-top:7px" onclick="deleteAllEntries()">🗑 Alle Einträge löschen</button>
     </div>
@@ -2583,7 +2583,8 @@ function exportBackup(){
   URL.revokeObjectURL(a.href);
 }
 function importBackup(event){
-  var file=event.target.files[0];
+  var input=event&&event.target;
+  var file=input&&input.files&&input.files[0];
   if(!file)return;
   var reader=new FileReader();
   reader.onload=function(e){
@@ -2600,18 +2601,27 @@ function importBackup(event){
       if(data.komponentenDB&&typeof data.komponentenDB==='object')komponentenDB=data.komponentenDB;
       if(Array.isArray(data.arbeitsberichte))arbeitsberichte=data.arbeitsberichte;
       if(Array.isArray(data.dokumente))dokumente=data.dokumente;
-      Promise.resolve(saveData()).then(function(){
+      // Sofort lokal sichern. Cloud-Sync läuft danach; das verhindert Datenverlust bei langsamer Verbindung.
+      saveLocal();
+      Promise.resolve(pushToCloud()).then(function(){
+        if(input)input.value='';
         alert('Backup erfolgreich importiert.');
         location.reload();
       }).catch(function(err){
         console.warn('Cloud-Speichern nach Import fehlgeschlagen:',err);
+        if(input)input.value='';
         alert('Backup lokal importiert. Cloud-Synchronisierung wird erneut versucht.');
         location.reload();
       });
     }catch(err){
       console.error('Backup-Import fehlgeschlagen:',err);
+      if(input)input.value='';
       alert('Ungültige Backup-Datei');
     }
+  };
+  reader.onerror=function(){
+    if(input)input.value='';
+    alert('Backup-Datei konnte nicht gelesen werden.');
   };
   reader.readAsText(file);
 }
