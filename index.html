@@ -331,7 +331,7 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
       <div class="project-stat"><b id="projectFotoCount">0</b><span>Fotos</span></div>
       <div class="project-stat"><b id="projectProtCount">0</b><span>Protokolle</span></div>
     </div>
-    <div class="search-wrap"><input type="search" id="projectSearch" placeholder="Baustelle, Adresse oder Kunde suchen …" oninput="renderProjectDashboard()"></div>
+    <div class="search-wrap"><input type="search" id="projectSearch" name="project-search-no-autofill" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Baustelle, Adresse oder Kunde suchen …" onfocus="if(this.value.indexOf('@')>=0){this.value='';renderProjectDashboard();}" oninput="renderProjectDashboard()"></div>
     <div id="projectList" class="project-list-two"></div>
   </div>
 
@@ -1587,7 +1587,7 @@ function gotoTab(id){
   if(id==='protokoll'){renderProtokollListe();fillDatalists();}
   if(id==='fotos')renderGalerie();
   if(id==='profil')updateUrlaubKonto();
-  if(id==='baustellen')renderProjectDashboard();
+  if(id==='baustellen'){var ps=document.getElementById('projectSearch');if(ps)ps.value='';renderProjectDashboard();}
   window.scrollTo(0,0);
 }
 
