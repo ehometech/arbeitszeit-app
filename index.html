@@ -4847,7 +4847,18 @@ function collectAbMaterial(){
 
 // ---- CRUD / Formular ----
 var BERICHT_STATUS_LABEL={entwurf:'Entwurf',bearbeitung:'In Bearbeitung',fertig:'Fertiggestellt',pruefung_bauleiter:'Zur Prüfung durch Bauleiter',bestaetigt_bauleiter:'Vom Bauleiter bestätigt',erneut_pruefung_bauleiter:'Zur erneuten Prüfung durch Bauleiter'};
-function berichtStunden(p){return (p.zeiten||[]).reduce(function(a,r){return a+(Number(r.h)||0);},0);}
+function berichtZeitStunden(r){
+  var st=String((r&&r.start)||''),en=String((r&&r.end)||'');
+  var m1=st.match(/^(\d{1,2}):(\d{2})$/),m2=en.match(/^(\d{1,2}):(\d{2})$/);
+  if(m1&&m2){
+    var startMin=Number(m1[1])*60+Number(m1[2]);
+    var endMin=Number(m2[1])*60+Number(m2[2]);
+    var netto=endMin-startMin-(Number(r.pause)||0);
+    if(netto>=0)return netto/60;
+  }
+  return Number(r&&r.h)||0;
+}
+function berichtStunden(p){return (p.zeiten||[]).reduce(function(a,r){return a+berichtZeitStunden(r);},0);}
 function abHatBestandsfotos(p){
   var meta=p.fotoMeta||{};
   return (p.fotoIds||[]).some(function(id){return meta[id]&&meta[id].kategorie==='bestand_vorher';});
