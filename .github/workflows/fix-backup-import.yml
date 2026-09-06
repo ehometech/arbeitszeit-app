@@ -1,4 +1,4 @@
-name: Fix backup import/export
+name: App QA and backup validation
 
 on:
   push:
@@ -11,13 +11,63 @@ permissions:
   contents: write
 
 jobs:
-  patch:
+  qa:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch index.html
+
+      - name: Ensure backup patch is applied
         run: python .github/scripts/fix_backup_import.py
-      - name: Commit patched app
+
+      - name: Extract inline JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          text=Path('index.html').read_text(encoding='utf-8')
+          scripts=re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',text,re.I|re.S)
+          Path('/tmp/app-inline.js').write_text('\n'.join(scripts),encoding='utf-8')
+          print('inline scripts:',len(scripts))
+          PY
+
+      - name: JavaScript syntax check
+        run: node --check /tmp/app-inline.js
+
+      - name: HTML duplicate ID check
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from collections import Counter
+          from pathlib import Path
+          class P(HTMLParser):
+            def __init__(self): super().__init__(); self.ids=[]
+            def handle_starttag(self,tag,attrs):
+              d=dict(attrs)
+              if d.get('id'): self.ids.append(d['id'])
+          p=P(); p.feed(Path('index.html').read_text(encoding='utf-8'))
+          dup=[x for x in Counter(p.ids).items() if x[1]>1]
+          if dup: raise SystemExit('duplicate IDs: '+str(dup))
+          print('HTML IDs OK:',len(p.ids))
+          PY
+
+      - name: Critical feature checks
+        run: |
+          grep -q 'function saveData' index.html
+          grep -q 'function importBackup' index.html
+          grep -q 'arbeitsberichte:arbeitsberichte' index.html
+          grep -q 'dokumente:dokumente' index.html
+          grep -q 'Array.isArray(data.arbeitsberichte)' index.html
+          grep -q 'fotoIds:fotoIds' index.html
+          grep -q 'fotoMeta:fotoMeta' index.html
+          grep -q 'function buildArbeitsberichtPDF' index.html
+          grep -q 'function openAbFotoPicker' index.html
+          grep -q 'function saveArbeitsbericht' index.html
+          grep -q 'function saveProtokoll' index.html
+          grep -q 'function startTimer' index.html
+          grep -q 'function stopTimer' index.html
+          echo 'Critical feature checks OK'
+
+      - name: Commit patch if needed
         run: |
           if git diff --quiet -- index.html; then
             echo "No change needed"
@@ -26,5 +76,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git commit -m "Fix complete backup import and export"
+          git commit -m "Keep complete backup import/export"
           git push
