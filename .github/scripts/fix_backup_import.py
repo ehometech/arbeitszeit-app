@@ -72,6 +72,24 @@ patched, count = pattern.subn(lambda m: new_section, text, count=1)
 if count != 1:
     raise SystemExit(f'Backup-Bereich nicht eindeutig gefunden: {count}')
 
+old_hours = "function berichtStunden(p){return (p.zeiten||[]).reduce(function(a,r){return a+(Number(r.h)||0);},0);}"
+new_hours = """function berichtZeitStunden(r){
+  var st=String((r&&r.start)||''),en=String((r&&r.end)||'');
+  var m1=st.match(/^(\\d{1,2}):(\\d{2})$/),m2=en.match(/^(\\d{1,2}):(\\d{2})$/);
+  if(m1&&m2){
+    var startMin=Number(m1[1])*60+Number(m1[2]);
+    var endMin=Number(m2[1])*60+Number(m2[2]);
+    var netto=endMin-startMin-(Number(r.pause)||0);
+    if(netto>=0)return netto/60;
+  }
+  return Number(r&&r.h)||0;
+}
+function berichtStunden(p){return (p.zeiten||[]).reduce(function(a,r){return a+berichtZeitStunden(r);},0);}"""
+if old_hours in patched:
+    patched = patched.replace(old_hours, new_hours, 1)
+elif 'function berichtZeitStunden(r)' not in patched:
+    raise SystemExit('berichtStunden-Funktion nicht gefunden')
+
 p.write_text(patched, encoding='utf-8')
 
 check = p.read_text(encoding='utf-8')
@@ -82,8 +100,9 @@ required = [
     'if(Array.isArray(data.arbeitsberichte))arbeitsberichte=data.arbeitsberichte;',
     'if(Array.isArray(data.baustellen))baustellen=data.baustellen;',
     'if(Array.isArray(data.protokolle))protokolle=data.protokolle;',
+    'function berichtZeitStunden(r)',
 ]
 missing = [x for x in required if x not in check]
 if missing:
     raise SystemExit('Prüfung fehlgeschlagen: ' + ', '.join(missing))
-print('Backup Import/Export erfolgreich gepatcht.')
+print('Backup Import/Export und minutengenaue Berichtsstunden erfolgreich gepatcht.')
