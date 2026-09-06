@@ -2560,7 +2560,21 @@ function loadCalendarEvents(){
 
 // ============ BACKUP / IMPORT ============
 function exportBackup(){
-  var data={APP_PIN:APP_PIN,employees:employees,entries:entries,fotos:fotos,firma:firma,baustellen:baustellen,timers:timers};
+  var data={
+    APP_PIN:APP_PIN,
+    employees:employees,
+    entries:entries,
+    fotos:fotos,
+    firma:firma,
+    baustellen:baustellen,
+    timers:timers,
+    protokolle:protokolle,
+    komponentenDB:komponentenDB,
+    arbeitsberichte:arbeitsberichte,
+    dokumente:dokumente,
+    exportedAt:new Date().toISOString(),
+    version:15
+  };
   var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   var a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -2575,15 +2589,27 @@ function importBackup(event){
   reader.onload=function(e){
     try{
       var data=JSON.parse(e.target.result);
-      APP_PIN=data.APP_PIN||APP_PIN;
-      employees=data.employees||[];
-      entries=data.entries||[];
-      fotos=data.fotos||[];
-      if(data.firma)firma=data.firma;
-      saveData();
-      alert('Backup erfolgreich importiert.');
-      location.reload();
+      if(data.APP_PIN)APP_PIN=data.APP_PIN;
+      if(Array.isArray(data.employees))employees=data.employees;
+      if(Array.isArray(data.entries))entries=data.entries;
+      if(Array.isArray(data.fotos))fotos=data.fotos;
+      if(data.firma&&typeof data.firma==='object')firma=data.firma;
+      if(Array.isArray(data.baustellen))baustellen=data.baustellen;
+      if(data.timers&&typeof data.timers==='object')timers=data.timers;
+      if(Array.isArray(data.protokolle))protokolle=data.protokolle;
+      if(data.komponentenDB&&typeof data.komponentenDB==='object')komponentenDB=data.komponentenDB;
+      if(Array.isArray(data.arbeitsberichte))arbeitsberichte=data.arbeitsberichte;
+      if(Array.isArray(data.dokumente))dokumente=data.dokumente;
+      Promise.resolve(saveData()).then(function(){
+        alert('Backup erfolgreich importiert.');
+        location.reload();
+      }).catch(function(err){
+        console.warn('Cloud-Speichern nach Import fehlgeschlagen:',err);
+        alert('Backup lokal importiert. Cloud-Synchronisierung wird erneut versucht.');
+        location.reload();
+      });
     }catch(err){
+      console.error('Backup-Import fehlgeschlagen:',err);
       alert('Ungültige Backup-Datei');
     }
   };
