@@ -2620,6 +2620,97 @@ function exportBackup(){
   a.click();
   URL.revokeObjectURL(a.href);
 }
+function recoveryEmployeeKey(e){
+  e=e||{};
+  var email=String(e.email||'').trim().toLowerCase();
+  if(email)return 'mail:'+email;
+  return 'name:'+String((e.vn||'')+'|'+(e.nl||'')).trim().toLowerCase();
+}
+function importRecoveryMerge(data,input){
+  if(!data||data.recoveryMode!=='merge'){return false;}
+  if(!Array.isArray(data.arbeitsberichte)||!data.arbeitsberichte.length){
+    alert('Wiederherstellungsdatei enthält keinen Arbeitsbericht.');
+    if(input)input.value='';
+    return true;
+  }
+  if(!confirm('Gezielte Wiederherstellung starten?\n\nBestehende Daten werden NICHT ersetzt. Fehlende Berichte und Fotos werden nur ergänzt.')) {
+    if(input)input.value='';
+    return true;
+  }
+
+  var sourceEmployees=Array.isArray(data.sourceEmployees)?data.sourceEmployees:[];
+  var empMap={};
+  function mapEmp(oldIdx){
+    oldIdx=Number(oldIdx);
+    if(empMap.hasOwnProperty(oldIdx))return empMap[oldIdx];
+    var src=sourceEmployees[oldIdx];
+    if(!src){empMap[oldIdx]=oldIdx;return oldIdx;}
+    var key=recoveryEmployeeKey(src);
+    var found=-1;
+    for(var i=0;i<employees.length;i++){
+      if(recoveryEmployeeKey(employees[i])===key){found=i;break;}
+    }
+    if(found<0){
+      employees.push(JSON.parse(JSON.stringify(src)));
+      found=employees.length-1;
+    }
+    empMap[oldIdx]=found;
+    return found;
+  }
+
+  var projectAdded=0;
+  (data.baustellen||[]).forEach(function(src){
+    if(!src||!src.name)return;
+    var existing=getBaustelleMeta(src.name);
+    if(!existing){
+      baustellen.push(JSON.parse(JSON.stringify(src)));
+      projectAdded++;
+    }else{
+      if(!existing.adresse&&src.adresse)existing.adresse=src.adresse;
+      if(!existing.kunde&&src.kunde)existing.kunde=src.kunde;
+    }
+  });
+
+  var photosAdded=0;
+  var knownPhotos={};
+  fotos.forEach(function(f){if(f&&f.publicId)knownPhotos[f.publicId]=true;});
+  (data.fotos||[]).forEach(function(src){
+    if(!src||!src.publicId||knownPhotos[src.publicId])return;
+    var cp=JSON.parse(JSON.stringify(src));
+    if(cp.ma!==undefined&&cp.ma!==null)cp.ma=mapEmp(cp.ma);
+    fotos.push(cp);
+    knownPhotos[cp.publicId]=true;
+    photosAdded++;
+  });
+
+  var reportsAdded=0,reportsSkipped=0;
+  (data.arbeitsberichte||[]).forEach(function(src){
+    if(!src)return;
+    var exists=arbeitsberichte.some(function(p){return String(p&&p.id)===String(src.id);});
+    if(exists){reportsSkipped++;return;}
+    var cp=JSON.parse(JSON.stringify(src));
+    cp.mitarbeiterIds=(cp.mitarbeiterIds||[]).map(mapEmp);
+    (cp.zeiten||[]).forEach(function(z){if(z&&z.ma!==undefined&&z.ma!==null)z.ma=mapEmp(z.ma);});
+    cp.history=Array.isArray(cp.history)?cp.history:[];
+    cp.history.push({timestamp:new Date().toISOString(),user:currentUserLabel(),action:'Bericht aus Sicherung wiederhergestellt',version:cp.contentVersion||0});
+    arbeitsberichte.unshift(cp);
+    reportsAdded++;
+  });
+
+  saveLocal();
+  Promise.resolve(pushToCloud()).then(function(){
+    if(input)input.value='';
+    alert('✅ Wiederherstellung abgeschlossen.\n\nBerichte ergänzt: '+reportsAdded+'\nFotos ergänzt: '+photosAdded+'\nBereits vorhandene Berichte übersprungen: '+reportsSkipped+'\n\nBestehende aktuelle Daten wurden nicht ersetzt.');
+    location.reload();
+  }).catch(function(err){
+    console.warn('Cloud-Speichern nach Wiederherstellung fehlgeschlagen:',err);
+    if(input)input.value='';
+    alert('Wiederherstellung lokal abgeschlossen. Cloud-Synchronisierung wird erneut versucht.\n\nBerichte ergänzt: '+reportsAdded+'\nFotos ergänzt: '+photosAdded);
+    location.reload();
+  });
+  return true;
+}
+
 function importBackup(event){
   var input=event&&event.target;
   var file=input&&input.files&&input.files[0];
@@ -2628,6 +2719,7 @@ function importBackup(event){
   reader.onload=function(e){
     try{
       var data=JSON.parse(e.target.result);
+      if(data.recoveryMode==='merge'){importRecoveryMerge(data,input);return;}
       if(data.APP_PIN)APP_PIN=data.APP_PIN;
       if(Array.isArray(data.employees))employees=data.employees;
       if(Array.isArray(data.entries))entries=data.entries;
