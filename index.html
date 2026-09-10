@@ -55,7 +55,7 @@ textarea{resize:vertical;min-height:52px}
 .foto-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .foto-thumb{border-radius:8px;overflow:hidden;position:relative;background:#f5f5f5;aspect-ratio:4/3}
 .foto-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.foto-thumb .foto-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.foto-thumb .foto-del,.bau-foto .foto-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.68);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
 .foto-thumb .foto-meta{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:3px 6px}
 .foto-upload-box{border:2px dashed #d4d4d4;border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-top:8px;transition:border-color .15s}
 .foto-upload-box:hover{border-color:#111}
@@ -65,7 +65,7 @@ textarea{resize:vertical;min-height:52px}
 .bau-card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;margin-bottom:10px;overflow:hidden}
 .bau-header{padding:12px 14px;border-bottom:1px solid #f0f0f0}
 .bau-fotos{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#f0f0f0}
-.bau-foto{aspect-ratio:4/3;overflow:hidden;background:#f5f5f5;cursor:pointer}
+.bau-foto{aspect-ratio:4/3;overflow:hidden;background:#f5f5f5;cursor:pointer;position:relative}
 .bau-foto img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}
 .bau-foto:hover img{transform:scale(1.03)}
 .bau-footer{padding:8px 14px;font-size:11px;color:#888}
@@ -1733,7 +1733,7 @@ function renderBdFotos(){
   var list=fotos.filter(function(f){return projectKey(f&&f.baustelle)===k;});
   var el=document.getElementById('bdFotosContent');if(!el)return;
   if(!list.length){el.innerHTML='<div class="card" style="text-align:center;color:#888;font-size:13px;padding:24px 0">📷 Noch keine Fotos zu dieser Baustelle.</div>';return;}
-  el.innerHTML='<div class="foto-grid">'+list.map(function(f){var info=(f.datum||'')+' '+(f.zeit||'')+(f.notiz?' · '+f.notiz:'');return '<div class="foto-thumb" onclick="openLightbox(\''+f.url+'\',\''+info.replace(/'/g,"\\'")+'\')"><img src="'+f.url+'" loading="lazy"></div>';}).join('')+'</div>';
+  el.innerHTML='<div class="foto-grid">'+list.map(function(f){var info=(f.datum||'')+' '+(f.zeit||'')+(f.notiz?' · '+f.notiz:'');var pid=encodeURIComponent(f.publicId||'');var del=(f.publicId&&canDeleteFoto(f))?'<button type="button" class="foto-del" title="Foto löschen" onclick="event.stopPropagation();deleteUploadedFoto(decodeURIComponent(\''+pid+'\'))">✕</button>':'';return '<div class="foto-thumb" onclick="openLightbox(\''+f.url+'\',\''+info.replace(/'/g,"\\'")+'\')"><img src="'+f.url+'" loading="lazy">'+del+'</div>';}).join('')+'</div>';
 }
 function renderBdProtokolle(){
   var name=currentBdBaustelle;if(!name)return;
@@ -2416,7 +2416,9 @@ function renderGalerie(){
     var fotoHTML=gFotos.map(function(f){
       var ma=employees[f.ma]||{vn:'?',nl:''};
       var info=f.datum+' '+f.zeit+(f.notiz?' · '+f.notiz:'')+(f.gps?' 📍 '+f.gps.lat.toFixed(4)+','+f.gps.lng.toFixed(4):'');
-      return '<div class="bau-foto" onclick="openLightbox(\''+f.url+'\',\''+info+'\')"><img src="'+f.url+'" alt="Foto" loading="lazy"></div>';
+      var pid=encodeURIComponent(f.publicId||'');
+      var del=(f.publicId&&canDeleteFoto(f))?'<button type="button" class="foto-del" title="Foto löschen" onclick="event.stopPropagation();deleteUploadedFoto(decodeURIComponent(\''+pid+'\'))">✕</button>':'';
+      return '<div class="bau-foto" onclick="openLightbox(\''+f.url+'\',\''+info.replace(/'/g,"\\'")+'\')"><img src="'+f.url+'" alt="Foto" loading="lazy">'+del+'</div>';
     }).join('');
     var ma0=employees[gFotos[0].ma]||{vn:'?',nl:''};
     var maInfo=isAG()?' · '+ma0.vn+' '+ma0.nl:'';
@@ -2429,6 +2431,42 @@ function renderGalerie(){
       +'<div class="bau-footer">'+(gFotos[0].notiz||'Keine Notiz')+'</div>'
       +'</div>';
   }).join('');
+}
+
+function canDeleteFoto(f){
+  if(!f)return false;
+  return isAG()||f.ma===activeMaIdx();
+}
+function deleteUploadedFoto(publicId){
+  var idx=fotos.findIndex(function(f){return f&&f.publicId===publicId;});
+  if(idx<0)return;
+  var foto=fotos[idx];
+  if(!canDeleteFoto(foto)){alert('Du darfst dieses Foto nicht löschen.');return;}
+  var linked=arbeitsberichte.filter(function(p){return Array.isArray(p.fotoIds)&&p.fotoIds.indexOf(publicId)>=0;});
+  var msg='Foto wirklich aus der App löschen?\n\nDas Foto wird aus der Baustellen-Galerie entfernt';
+  if(linked.length)msg+=' und aus '+linked.length+' verknüpften Arbeitsbericht'+(linked.length===1?'':'en');
+  msg+='.';
+  if(!confirm(msg))return;
+
+  fotos.splice(idx,1);
+  arbeitsberichte.forEach(function(p){
+    if(!Array.isArray(p.fotoIds)||p.fotoIds.indexOf(publicId)<0)return;
+    var wasValidBefore=abBlIstAktuell(p);
+    p.fotoIds=p.fotoIds.filter(function(id){return id!==publicId;});
+    if(p.fotoMeta&&p.fotoMeta[publicId])delete p.fotoMeta[publicId];
+    var newHash=computeAbContentHash(p);
+    if(wasValidBefore&&newHash!==p.contentHash)p.status='erneut_pruefung_bauleiter';
+    p.contentHash=newHash;
+    p.contentVersion=(p.contentVersion||0)+1;
+    p.updatedAt=new Date().toISOString();
+    pushAbHistory(p,'Foto gelöscht');
+  });
+  abCurrentFotos=abCurrentFotos.filter(function(f){return f.publicId!==publicId;});
+  abFotoSelected={};
+  saveData();
+  renderGalerie();
+  if(currentBdBaustelle){renderBdFotos();renderBdBerichte();}
+  if(document.getElementById('berichtFormView')&&document.getElementById('berichtFormView').style.display!=='none')renderAbFotosList();
 }
 
 function openLightbox(url,info){document.getElementById('lightboxImg').src=url;document.getElementById('lightboxInfo').textContent=info;document.getElementById('lightbox').classList.add('open');}
@@ -2582,6 +2620,97 @@ function exportBackup(){
   a.click();
   URL.revokeObjectURL(a.href);
 }
+function recoveryEmployeeKey(e){
+  e=e||{};
+  var email=String(e.email||'').trim().toLowerCase();
+  if(email)return 'mail:'+email;
+  return 'name:'+String((e.vn||'')+'|'+(e.nl||'')).trim().toLowerCase();
+}
+function importRecoveryMerge(data,input){
+  if(!data||data.recoveryMode!=='merge'){return false;}
+  if(!Array.isArray(data.arbeitsberichte)||!data.arbeitsberichte.length){
+    alert('Wiederherstellungsdatei enthält keinen Arbeitsbericht.');
+    if(input)input.value='';
+    return true;
+  }
+  if(!confirm('Gezielte Wiederherstellung starten?\n\nBestehende Daten werden NICHT ersetzt. Fehlende Berichte und Fotos werden nur ergänzt.')) {
+    if(input)input.value='';
+    return true;
+  }
+
+  var sourceEmployees=Array.isArray(data.sourceEmployees)?data.sourceEmployees:[];
+  var empMap={};
+  function mapEmp(oldIdx){
+    oldIdx=Number(oldIdx);
+    if(empMap.hasOwnProperty(oldIdx))return empMap[oldIdx];
+    var src=sourceEmployees[oldIdx];
+    if(!src){empMap[oldIdx]=oldIdx;return oldIdx;}
+    var key=recoveryEmployeeKey(src);
+    var found=-1;
+    for(var i=0;i<employees.length;i++){
+      if(recoveryEmployeeKey(employees[i])===key){found=i;break;}
+    }
+    if(found<0){
+      employees.push(JSON.parse(JSON.stringify(src)));
+      found=employees.length-1;
+    }
+    empMap[oldIdx]=found;
+    return found;
+  }
+
+  var projectAdded=0;
+  (data.baustellen||[]).forEach(function(src){
+    if(!src||!src.name)return;
+    var existing=getBaustelleMeta(src.name);
+    if(!existing){
+      baustellen.push(JSON.parse(JSON.stringify(src)));
+      projectAdded++;
+    }else{
+      if(!existing.adresse&&src.adresse)existing.adresse=src.adresse;
+      if(!existing.kunde&&src.kunde)existing.kunde=src.kunde;
+    }
+  });
+
+  var photosAdded=0;
+  var knownPhotos={};
+  fotos.forEach(function(f){if(f&&f.publicId)knownPhotos[f.publicId]=true;});
+  (data.fotos||[]).forEach(function(src){
+    if(!src||!src.publicId||knownPhotos[src.publicId])return;
+    var cp=JSON.parse(JSON.stringify(src));
+    if(cp.ma!==undefined&&cp.ma!==null)cp.ma=mapEmp(cp.ma);
+    fotos.push(cp);
+    knownPhotos[cp.publicId]=true;
+    photosAdded++;
+  });
+
+  var reportsAdded=0,reportsSkipped=0;
+  (data.arbeitsberichte||[]).forEach(function(src){
+    if(!src)return;
+    var exists=arbeitsberichte.some(function(p){return String(p&&p.id)===String(src.id);});
+    if(exists){reportsSkipped++;return;}
+    var cp=JSON.parse(JSON.stringify(src));
+    cp.mitarbeiterIds=(cp.mitarbeiterIds||[]).map(mapEmp);
+    (cp.zeiten||[]).forEach(function(z){if(z&&z.ma!==undefined&&z.ma!==null)z.ma=mapEmp(z.ma);});
+    cp.history=Array.isArray(cp.history)?cp.history:[];
+    cp.history.push({timestamp:new Date().toISOString(),user:currentUserLabel(),action:'Bericht aus Sicherung wiederhergestellt',version:cp.contentVersion||0});
+    arbeitsberichte.unshift(cp);
+    reportsAdded++;
+  });
+
+  saveLocal();
+  Promise.resolve(pushToCloud()).then(function(){
+    if(input)input.value='';
+    alert('✅ Wiederherstellung abgeschlossen.\n\nBerichte ergänzt: '+reportsAdded+'\nFotos ergänzt: '+photosAdded+'\nBereits vorhandene Berichte übersprungen: '+reportsSkipped+'\n\nBestehende aktuelle Daten wurden nicht ersetzt.');
+    location.reload();
+  }).catch(function(err){
+    console.warn('Cloud-Speichern nach Wiederherstellung fehlgeschlagen:',err);
+    if(input)input.value='';
+    alert('Wiederherstellung lokal abgeschlossen. Cloud-Synchronisierung wird erneut versucht.\n\nBerichte ergänzt: '+reportsAdded+'\nFotos ergänzt: '+photosAdded);
+    location.reload();
+  });
+  return true;
+}
+
 function importBackup(event){
   var input=event&&event.target;
   var file=input&&input.files&&input.files[0];
@@ -2590,6 +2719,7 @@ function importBackup(event){
   reader.onload=function(e){
     try{
       var data=JSON.parse(e.target.result);
+      if(data.recoveryMode==='merge'){importRecoveryMerge(data,input);return;}
       if(data.APP_PIN)APP_PIN=data.APP_PIN;
       if(Array.isArray(data.employees))employees=data.employees;
       if(Array.isArray(data.entries))entries=data.entries;
@@ -4971,16 +5101,19 @@ function duplicateArbeitsbericht(i){
   copy.id=Date.now();copy.status='entwurf';copy.datum=todayStr();
   copy.unterschriften={monteur:{name:'',funktion:'Monteur / Mitarbeiter',datum:'',sig:''},bauleiter:{name:'',funktion:'Bauleiter',datum:'',sig:'',bemerkung:'',geprueftArbeiten:false,geprueftDoku:false},kunde:{name:'',datum:'',sig:'',erlaeutert:false}};
   copy.blBestaetigtAm='';copy.blBestaetigtDurch='';copy.blConfirmedHash='';copy.blConfirmations=[];
+  // Kopien übernehmen bewusst KEINE Fotodokumentation. Die Originalfotos bleiben unverändert
+  // in der Baustellen-Galerie und können bei Bedarf neu ausgewählt werden.
+  copy.fotoIds=[];copy.fotoMeta={};
   copy.contentVersion=0;copy.contentHash='';
   copy.history=[{timestamp:new Date().toISOString(),user:currentUserLabel(),action:'Bericht erstellt',version:0}];
   copy.createdAt=new Date().toISOString();copy.updatedAt=copy.createdAt;
   arbeitsberichte.unshift(copy);
   saveData();renderBdBerichte();
-  alert('Arbeitsbericht dupliziert (ohne Unterschriften/Historie). Du kannst die Kopie jetzt bearbeiten.');
+  alert('Arbeitsbericht dupliziert (ohne Fotos, Unterschriften und Historie). Du kannst die Kopie jetzt bearbeiten.');
 }
 function deleteArbeitsbericht(i){
   var p=arbeitsberichte[i];if(!p)return;
-  if(!confirm('Arbeitsbericht vom '+fmtDateDE(p.datum)+' wirklich löschen?'))return;
+  if(!confirm('Arbeitsbericht vom '+fmtDateDE(p.datum)+' wirklich löschen?\n\nDie zugehörigen Baustellenfotos bleiben erhalten.'))return;
   arbeitsberichte.splice(i,1);
   if(editingBerichtIdx===i)editingBerichtIdx=-1;
   saveData();renderBdBerichte();
