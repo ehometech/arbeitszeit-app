@@ -1510,7 +1510,7 @@ function logout(){
       return;
     }
   }
-  try{sessionStorage.removeItem('az_session');}catch(e){}currentUser=null;pinBuffer='';timerSec=0;pauseMins=0;timerRunning=false;clearInterval(timerInt);document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('pinStep').style.display='none';document.getElementById('userStep').style.display='block';buildUserList();}
+  try{sessionStorage.removeItem('az_session');sessionStorage.removeItem('az_navigation');}catch(e){}currentUser=null;pinBuffer='';timerSec=0;pauseMins=0;timerRunning=false;clearInterval(timerInt);document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('pinStep').style.display='none';document.getElementById('userStep').style.display='block';buildUserList();}
 
 // ============ INIT ============
 function initApp(){
@@ -1558,7 +1558,10 @@ function initApp(){
     updateUrlaubKonto();
     getGPS();
   }
-  initProjectUI();gotoTab('heute');renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
+  initProjectUI();gotoTab('heute',true);renderRecent();renderMonth();renderGalerie();restoreTimerIfRunning();
+  // Erst nach Abschluss des gesamten Inline-Skripts wiederherstellen: Einige Berichtsvariablen
+  // werden weiter unten initialisiert und sind während des frühen Auto-Logins noch nicht bereit.
+  setTimeout(restoreNavigationState,0);
 
   var ub=document.getElementById('uploadBox');
   ub.addEventListener('dragover',function(e){e.preventDefault();ub.classList.add('dragover');});
@@ -1578,7 +1581,36 @@ function getGPS(){
 }
 
 // ============ TABS ============
-function gotoTab(id){
+function saveNavigationState(patch){
+  try{
+    var prev=JSON.parse(sessionStorage.getItem('az_navigation')||'{}');
+    var state=Object.assign(prev,patch||{});
+    if(currentBdBaustelle)state.baustelle=currentBdBaustelle;
+    state.sub=currentBdSub||'uebersicht';
+    sessionStorage.setItem('az_navigation',JSON.stringify(state));
+  }catch(e){}
+}
+function restoreNavigationState(){
+  var state=null;
+  try{state=JSON.parse(sessionStorage.getItem('az_navigation')||'null');}catch(e){}
+  if(!state||!state.tab||!document.getElementById('tab-'+state.tab))return;
+  if(state.tab==='baustelle-detail'){
+    if(!state.baustelle)return;
+    currentBdBaustelle=state.baustelle;
+    gotoTab('baustelle-detail',true);
+    showBdSub(state.sub||'uebersicht',true);
+    if((state.sub||'')==='berichte'&&state.berichtOpen){
+      var draft=getBestBerichtDraft();
+      if(draft&&draft.p)restoreBerichtDraft();
+      else if(state.berichtId!=null){
+        var idx=arbeitsberichte.findIndex(function(b){return String(b&&b.id)===String(state.berichtId);});
+        if(idx>=0)editArbeitsbericht(idx);
+      }else newArbeitsbericht();
+    }
+  }else gotoTab(state.tab,true);
+  if(Number(state.scrollY)>0)setTimeout(function(){window.scrollTo(0,Number(state.scrollY)||0);},80);
+}
+function gotoTab(id,skipNavigationSave){
   ['heute','baustellen','baustelle-detail','mehr','eintrag','fotos','monat','protokoll','ag','profil'].forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('active');});
   var tel=document.getElementById('tab-'+id);if(tel)tel.classList.add('active');
@@ -1589,6 +1621,7 @@ function gotoTab(id){
   if(id==='fotos')renderGalerie();
   if(id==='profil')updateUrlaubKonto();
   if(id==='baustellen'){var ps=document.getElementById('projectSearch');if(ps)ps.value='';renderProjectDashboard();}
+  if(!skipNavigationSave)saveNavigationState({tab:id,berichtOpen:false,scrollY:0});
   window.scrollTo(0,0);
 }
 
@@ -1725,7 +1758,7 @@ function openProject(name){
   gotoTab('baustelle-detail');
   showBdSub('uebersicht');
 }
-function showBdSub(sub){
+function showBdSub(sub,skipNavigationSave){
   currentBdSub=sub;
   document.querySelectorAll('.bd-sub').forEach(function(b){b.classList.toggle('active',b.dataset.sub===sub);});
   document.querySelectorAll('.bd-sect').forEach(function(s){s.classList.toggle('active',s.dataset.sub===sub);});
@@ -1735,6 +1768,7 @@ function showBdSub(sub){
   else if(sub==='fotos')renderBdFotos();
   else if(sub==='protokolle')renderBdProtokolle();
   else if(sub==='dokumente')renderBdDokumente();
+  if(!skipNavigationSave)saveNavigationState({tab:'baustelle-detail',baustelle:currentBdBaustelle,sub:sub,berichtOpen:false,scrollY:0});
   window.scrollTo(0,0);
 }
 function renderBdUebersicht(){
@@ -5237,6 +5271,8 @@ function openBerichtForm(p){
   renderAbStatusActions(pForBanners);
   renderAbHistory(p);
 
+  saveNavigationState({tab:'baustelle-detail',baustelle:currentBdBaustelle,sub:'berichte',berichtOpen:true,berichtId:(p&&p.id!=null)?p.id:null,scrollY:0});
+
   window.scrollTo(0,0);
   // Guard erst freigeben, NACHDEM auch die asynchrone Signatur-Pad-Initialisierung (setTimeout 60ms in
   // initAbSigPads) abgeschlossen ist — sonst könnte deren verzögerter Abschluss noch als Änderung zählen.
@@ -5245,6 +5281,7 @@ function openBerichtForm(p){
 function closeBerichtForm(){
   document.getElementById('berichtFormView').style.display='none';
   document.getElementById('bdBerichteListView').style.display='block';
+  saveNavigationState({tab:'baustelle-detail',baustelle:currentBdBaustelle,sub:'berichte',berichtOpen:false,berichtId:null,scrollY:0});
   renderBdBerichte();
 }
 function buildBerichtFromForm(){
@@ -5866,8 +5903,20 @@ function buildArbeitsberichtPDF(p,fotoRecs,imgs){
   doc.save('Arbeitsbericht_'+(p.baustelle||'Baustelle').replace(/[^\w-]+/g,'_')+'_'+(p.datum||todayStr())+'.pdf');
 }
 
-window.addEventListener('pagehide',saveData);
-document.addEventListener('visibilitychange',function(){if(document.hidden)saveData();});
+function saveBeforePageLeave(){
+  var fv=document.getElementById('berichtFormView');
+  if(fv&&fv.style.display!=='none'){
+    clearTimeout(berichtDraftTimer);
+    saveBerichtDraft();
+    saveNavigationState({tab:'baustelle-detail',baustelle:currentBdBaustelle,sub:'berichte',berichtOpen:true,berichtId:(editingBerichtIdx>=0&&arbeitsberichte[editingBerichtIdx])?arbeitsberichte[editingBerichtIdx].id:null,scrollY:window.scrollY||0});
+  }else{
+    var active=document.querySelector('.tab.active');
+    saveNavigationState({tab:active?active.id.replace('tab-',''):'heute',scrollY:window.scrollY||0});
+  }
+  saveData();
+}
+window.addEventListener('pagehide',saveBeforePageLeave);
+document.addEventListener('visibilitychange',function(){if(document.hidden)saveBeforePageLeave();});
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
