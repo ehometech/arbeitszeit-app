@@ -404,7 +404,7 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
       <div id="berichtFormView" style="display:none">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <button type="button" class="btn" style="flex:0;padding:6px 10px" onclick="closeBerichtForm()">← Liste</button>
-          <div style="flex:1;font-size:15px;font-weight:600" id="berichtFormTitle">Neuer Arbeitsbericht</div>
+          <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600" id="berichtFormTitle">Neuer Arbeitsbericht</div><div id="berichtSaveStatus" style="font-size:10px;color:#6b7280;margin-top:2px">Änderungen werden automatisch gespeichert</div></div>
         </div>
         <div id="berichtBlChangedBanner" class="bl-changed-banner" style="display:none">⚠️ Der Bericht wurde nach der Bestätigung geändert.</div>
 
@@ -1378,6 +1378,7 @@ var currentBdBaustelle = null; // Name der aktuell geöffneten Baustelle-Detaila
 var currentBdSub = 'uebersicht';
 var editingBerichtIdx = -1;
 var berichtDraftTimer = null;
+var berichtSaveSeq = 0;
 var cloudBerichtDraft = null;
 var isLoadingArbeitsbericht = false; // true während openBerichtForm() ein Formular (neu/bestehend/Entwurf) befüllt —
                                       // verhindert, dass das reine Laden/Anzeigen einen Autosave-Entwurf erzeugt
@@ -5203,6 +5204,7 @@ function openBerichtForm(p){
   document.getElementById('bdBerichteListView').style.display='none';
   document.getElementById('berichtFormView').style.display='block';
   document.getElementById('berichtFormTitle').textContent=p?'Arbeitsbericht bearbeiten':'Neuer Arbeitsbericht';
+  setBerichtSaveStatus(p?'✓ Gespeicherter Bericht':'Änderungen werden automatisch gespeichert',p?'#15803d':'#6b7280');
   var name=currentBdBaustelle;
   var meta=getBaustelleMeta(name)||{};
   document.getElementById('abBaustelle').value=name||'';
@@ -5311,7 +5313,12 @@ function buildBerichtFromForm(){
     unterschriften:collectAbUnterschriften()
   };
 }
-function saveArbeitsbericht(silent,actionOverride){
+function setBerichtSaveStatus(text,color){
+  var el=document.getElementById('berichtSaveStatus');if(!el)return;
+  el.textContent=text||'';el.style.color=color||'#6b7280';
+}
+function saveArbeitsbericht(silent,actionOverride,isAutoSave){
+  if(!silent){clearTimeout(berichtDraftTimer);berichtSaveSeq++;setBerichtSaveStatus('Speichert…','#2563eb');}
   var baustelle=document.getElementById('abBaustelle').value;
   if(!baustelle){alert('Keine Baustelle zugeordnet.');return Promise.resolve(false);}
   var p=buildBerichtFromForm();
@@ -5342,8 +5349,11 @@ function saveArbeitsbericht(silent,actionOverride){
     }else action='Bericht geändert';
   }
   p.contentHash=newHash;
-  p.contentVersion=(p.contentVersion||0)+1;
-  pushAbHistory(p,action);
+  var contentChanged=!prev||newHash!==prev.contentHash;
+  if(contentChanged)p.contentVersion=(p.contentVersion||0)+1;
+  // Autospeichern soll die Historie nicht nach jedem Tastendruck aufblasen. Der erste
+  // automatische Speichervorgang legt jedoch einen nachvollziehbaren Erstell-Eintrag an.
+  if(!isAutoSave||!prev)pushAbHistory(p,isAutoSave&&!prev?'Bericht automatisch angelegt':action);
 
   rememberProject(baustelle,p.adresse,p.kunde);
   if(p.material&&p.material.length){
@@ -5353,6 +5363,7 @@ function saveArbeitsbericht(silent,actionOverride){
   }
   if(editingBerichtIdx>=0&&arbeitsberichte[editingBerichtIdx])arbeitsberichte[editingBerichtIdx]=p;
   else{arbeitsberichte.unshift(p);editingBerichtIdx=0;}
+  saveNavigationState({tab:'baustelle-detail',baustelle:currentBdBaustelle,sub:'berichte',berichtOpen:true,berichtId:p.id,scrollY:window.scrollY||0});
   var cloudSave=saveData();
   fillDlAbMaterial();
   clearBerichtDraft();
@@ -5361,11 +5372,9 @@ function saveArbeitsbericht(silent,actionOverride){
   renderAbHistory(p);
   if(!silent){
     cloudSave.then(function(ok){
-      alert(ok?'Arbeitsbericht gespeichert und mit Firebase synchronisiert!':'Arbeitsbericht lokal gespeichert. Cloud-Sync folgt automatisch.');
-      closeBerichtForm();
+      setBerichtSaveStatus(ok?'✓ Manuell gespeichert und synchronisiert':'✓ Manuell lokal gespeichert · Cloud-Sync folgt','#15803d');
     }).catch(function(){
-      alert('Arbeitsbericht lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');
-      closeBerichtForm();
+      setBerichtSaveStatus('✓ Lokal gespeichert · Cloud-Synchronisierung folgt','#b45309');
     });
   }
   return cloudSave;
@@ -5619,7 +5628,22 @@ function saveBerichtDraft(){
 }
 function queueBerichtDraft(){
   if(isLoadingArbeitsbericht)return; // reines Laden/Befüllen eines Formulars zählt nicht als Nutzeränderung
-  clearTimeout(berichtDraftTimer);berichtDraftTimer=setTimeout(saveBerichtDraft,1500);
+  clearTimeout(berichtDraftTimer);
+  setBerichtSaveStatus('Noch nicht gespeichert…','#b45309');
+  berichtDraftTimer=setTimeout(autoSaveArbeitsbericht,1200);
+}
+function autoSaveArbeitsbericht(){
+  var fv=document.getElementById('berichtFormView');
+  if(!fv||fv.style.display==='none'||isLoadingArbeitsbericht)return Promise.resolve(false);
+  var seq=++berichtSaveSeq;
+  setBerichtSaveStatus('Speichert automatisch…','#2563eb');
+  return saveArbeitsbericht(true,null,true).then(function(ok){
+    if(seq===berichtSaveSeq)setBerichtSaveStatus(ok?'✓ Automatisch gespeichert und synchronisiert':'✓ Automatisch lokal gespeichert · Cloud-Sync folgt','#15803d');
+    return ok;
+  }).catch(function(){
+    if(seq===berichtSaveSeq)setBerichtSaveStatus('✓ Lokal gespeichert · Cloud-Synchronisierung folgt','#b45309');
+    return false;
+  });
 }
 function restoreBerichtDraft(){
   try{
@@ -5907,7 +5931,9 @@ function saveBeforePageLeave(){
   var fv=document.getElementById('berichtFormView');
   if(fv&&fv.style.display!=='none'){
     clearTimeout(berichtDraftTimer);
-    saveBerichtDraft();
+    // Synchron in den eigentlichen Bericht/LocalStorage übernehmen. Der Cloud-Teil läuft,
+    // soweit der Browser beim Seitenwechsel noch Zeit dafür gibt, anschließend weiter.
+    saveArbeitsbericht(true,null,true);
     saveNavigationState({tab:'baustelle-detail',baustelle:currentBdBaustelle,sub:'berichte',berichtOpen:true,berichtId:(editingBerichtIdx>=0&&arbeitsberichte[editingBerichtIdx])?arbeitsberichte[editingBerichtIdx].id:null,scrollY:window.scrollY||0});
   }else{
     var active=document.querySelector('.tab.active');
