@@ -3014,6 +3014,10 @@ function pushToCloud(){
   return Promise.resolve(false);
 }
 function refreshAll(){
+  // Ein geöffnetes Arbeitsbericht-Formular darf durch eingehende Firebase-Snapshots nicht
+  // neu gerendert werden. renderBdBerichte() blendet das Formular absichtlich aus und würde
+  // den Benutzer sonst während der Eingabe immer wieder zur Berichtsliste zurückwerfen.
+  var berichtFormOpen=!!(document.getElementById('berichtFormView')&&document.getElementById('berichtFormView').style.display!=='none');
   buildUserList();
   updateCloudBadge();
   if(currentUser){
@@ -3027,7 +3031,9 @@ function refreshAll(){
     renderRecent();renderMonth();renderGalerie();renderGlobalProjectDatalist();restoreTimerIfRunning();
     if(document.getElementById('protListView')&&document.getElementById('protListView').style.display!=='none')renderProtokollListe();
     if(document.getElementById('tab-baustellen')&&document.getElementById('tab-baustellen').classList.contains('active'))renderProjectDashboard();
-    if(document.getElementById('tab-baustelle-detail')&&document.getElementById('tab-baustelle-detail').classList.contains('active'))showBdSub(currentBdSub);
+    if(document.getElementById('tab-baustelle-detail')&&document.getElementById('tab-baustelle-detail').classList.contains('active')){
+      if(!(currentBdSub==='berichte'&&berichtFormOpen))showBdSub(currentBdSub);
+    }
     if(isAG()){renderMAListe();renderAgFilterSelect();}
     else{updateUrlaubKonto();}
   }
@@ -3086,6 +3092,9 @@ function initFirebase(){
         var cloudTime=d.savedAt?new Date(d.savedAt).getTime():0;
         var localTime=localSavedAt?new Date(localSavedAt).getTime():0;
         if(cloudTime>localTime){
+          // Index vor dem Ersetzen des Arrays über die stabile Berichts-ID merken. Andere Geräte
+          // können Berichte hinzufügen/löschen und dadurch alle Array-Indizes verschieben.
+          var openBerichtId=(editingBerichtIdx>=0&&arbeitsberichte[editingBerichtIdx])?arbeitsberichte[editingBerichtIdx].id:null;
           applyingSnapshot=true;
           if(d.APP_PIN)APP_PIN=d.APP_PIN;
           if(Array.isArray(d.employees))employees=d.employees;
@@ -3097,6 +3106,9 @@ function initFirebase(){
           if(Array.isArray(d.protokolle))protokolle=d.protokolle;
           if(d.komponentenDB)komponentenDB=Object.assign({module:[],wr:[],speicher:[],zsk:[],material:[],wallbox:[],geschosse:[]},d.komponentenDB);
           if(Array.isArray(d.arbeitsberichte))arbeitsberichte=d.arbeitsberichte;
+          if(openBerichtId!=null){
+            editingBerichtIdx=arbeitsberichte.findIndex(function(b){return String(b&&b.id)===String(openBerichtId);});
+          }
           if(Array.isArray(d.dokumente))dokumente=d.dokumente;
           cloudProtDraft=d.protDraft||null;
           cloudBerichtDraft=d.berichtDraft||null;
