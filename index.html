@@ -585,7 +585,8 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
           <button type="button" class="btn pri" onclick="saveArbeitsbericht()">✓ Speichern</button>
         </div>
         <div class="brow">
-          <button type="button" class="btn" onclick="saveArbeitsbericht(true);arbeitsberichtPDF(editingBerichtIdx)">📄 Baudokumentation PDF</button>
+          <button type="button" class="btn" onclick="saveArbeitsbericht(true).then(function(){arbeitsberichtPDF(editingBerichtIdx);})">📄 PDF herunterladen</button>
+          <button type="button" class="btn inf" onclick="saveArbeitsbericht(true).then(function(){arbeitsberichtTeilen(editingBerichtIdx);})">✉️ PDF per E-Mail</button>
         </div>
 
         <div id="abFotoPickModal" class="modal-ov">
@@ -5428,7 +5429,8 @@ function renderBdBerichte(){
       +'<div class="ber-sub">'+berichtStunden(p).toFixed(2).replace('.',',')+' h · <span class="status-pill '+statusCls+'">'+statusLabel+'</span></div></div>'
       +'<div class="ber-actions">'
       +'<button type="button" class="btn" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();editArbeitsbericht('+i+')">✎</button>'
-      +'<button type="button" class="btn inf" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();arbeitsberichtPDF('+i+')">📄</button>'
+      +'<button type="button" class="btn inf" title="PDF herunterladen" aria-label="PDF herunterladen" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();arbeitsberichtPDF('+i+')">📄</button>'
+      +'<button type="button" class="btn inf" title="PDF per E-Mail senden" aria-label="PDF per E-Mail senden" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();arbeitsberichtTeilen('+i+')">✉️</button>'
       +'<button type="button" class="btn" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();duplicateArbeitsbericht('+i+')">⎘</button>'
       +'<button type="button" class="btn dan" style="flex:0;padding:4px 8px;font-size:11px" onclick="event.stopPropagation();deleteArbeitsbericht('+i+')">🗑</button>'
       +'</div></div>';
@@ -5684,18 +5686,53 @@ function discardBerichtDraft(){
 })();
 
 // ---- PDF: Baudokumentation / Arbeitsbericht ----
-function arbeitsberichtPDF(idx){
+function prepareArbeitsberichtPDF(idx){
   var p=arbeitsberichte[idx];
-  if(!p){alert('Bitte zuerst speichern.');return;}
-  if(!(window.jspdf&&window.jspdf.jsPDF)){alert('PDF-Bibliothek nicht geladen. Bitte Internetverbindung prüfen.');return;}
+  if(!p){alert('Bitte zuerst speichern.');return Promise.reject(new Error('Bericht nicht gespeichert'));}
+  if(!(window.jspdf&&window.jspdf.jsPDF)){alert('PDF-Bibliothek nicht geladen. Bitte Internetverbindung prüfen.');return Promise.reject(new Error('PDF-Bibliothek fehlt'));}
   var fotoRecs=(p.fotoIds||[]).map(function(id){
     var f=findFotoByPublicId(id);
     var m=(p.fotoMeta||{})[id]||{};
     return {publicId:id,url:(f&&f.url)||'',meta:m};
   }).filter(function(r){return r.url;});
   var loads=fotoRecs.map(function(r){return imgToDataURL(r.url,500);});
-  Promise.all(loads).then(function(imgs){
-    buildArbeitsberichtPDF(p,fotoRecs,imgs);
+  return Promise.all(loads).then(function(imgs){
+    return buildArbeitsberichtPDF(p,fotoRecs,imgs);
+  });
+}
+function arbeitsberichtPDF(idx){
+  prepareArbeitsberichtPDF(idx).then(function(pdf){
+    pdf.doc.save(pdf.filename);
+  }).catch(function(err){
+    if(err&&err.message!=='Bericht nicht gespeichert'&&err.message!=='PDF-Bibliothek fehlt'){
+      console.error('PDF-Erstellung fehlgeschlagen:',err);
+      alert('Die PDF konnte nicht erstellt werden. Bitte erneut versuchen.');
+    }
+  });
+}
+function arbeitsberichtTeilen(idx){
+  prepareArbeitsberichtPDF(idx).then(function(pdf){
+    var blob=pdf.doc.output('blob');
+    var file=new File([blob],pdf.filename,{type:'application/pdf'});
+    var shareData={
+      title:'Arbeitsbericht '+(pdf.bericht.baustelle||''),
+      text:'Guten Tag,\n\nim Anhang erhalten Sie den Arbeitsbericht als PDF.\n\nMit freundlichen Grüßen',
+      files:[file]
+    };
+    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+      return navigator.share(shareData).catch(function(err){
+        if(err&&err.name==='AbortError')return;
+        throw err;
+      });
+    }
+    pdf.doc.save(pdf.filename);
+    alert('Die PDF wurde heruntergeladen. Ihr Gerät unterstützt das direkte Teilen mit PDF-Anhang hier nicht. Bitte hängen Sie die Datei in Ihrer E-Mail-App an.');
+  }).catch(function(err){
+    if(err&&err.name==='AbortError')return;
+    if(err&&err.message!=='Bericht nicht gespeichert'&&err.message!=='PDF-Bibliothek fehlt'){
+      console.error('E-Mail-Freigabe fehlgeschlagen:',err);
+      alert('Der Bericht konnte nicht geteilt werden. Die PDF wird stattdessen heruntergeladen.');
+    }
   });
 }
 function buildArbeitsberichtPDF(p,fotoRecs,imgs){
@@ -5924,7 +5961,8 @@ function buildArbeitsberichtPDF(p,fotoRecs,imgs){
     doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(140,140,140);
     doc.text('Seite '+pi+' von '+pages,PW-M,PH-8,{align:'right'});
   }
-  doc.save('Arbeitsbericht_'+(p.baustelle||'Baustelle').replace(/[^\w-]+/g,'_')+'_'+(p.datum||todayStr())+'.pdf');
+  var filename='Arbeitsbericht_'+(p.baustelle||'Baustelle').replace(/[^\w-]+/g,'_')+'_'+(p.datum||todayStr())+'.pdf';
+  return {doc:doc,filename:filename,bericht:p};
 }
 
 function saveBeforePageLeave(){
