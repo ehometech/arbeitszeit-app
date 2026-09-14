@@ -5722,7 +5722,9 @@ function arbeitsberichtTeilen(idx){
     if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
       return navigator.share(shareData).catch(function(err){
         if(err&&err.name==='AbortError')return;
-        throw err;
+        console.error('Direktes Teilen fehlgeschlagen:',err);
+        pdf.doc.save(pdf.filename);
+        alert('Die PDF wurde heruntergeladen. Bitte hängen Sie die Datei in Ihrer E-Mail-App an.');
       });
     }
     pdf.doc.save(pdf.filename);
