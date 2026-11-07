@@ -1945,7 +1945,7 @@ function calcNetto(){var s=document.getElementById('eingStart').value;var e=docu
 function toggleTyp(){document.getElementById('zeitBlock').style.display=(document.getElementById('eingTyp').value==='arbeit'||document.getElementById('eingTyp').value==='schule')?'block':'none';}
 function renderMASelect(){var el=document.getElementById('eingMA');if(!el)return;el.innerHTML=employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
 function saveEntry(){var typ=document.getElementById('eingTyp').value;var s=document.getElementById('eingStart').value;var e=document.getElementById('eingEnd').value;var p=parseInt(document.getElementById('eingPause').value)||0;var net=0;if(typ==='arbeit'||typ==='schule'){if(!s||!e){alert('Bitte Start und Ende eingeben.');return;}var sm=parseInt(s.split(':')[0])*60+parseInt(s.split(':')[1]);var em=parseInt(e.split(':')[0])*60+parseInt(e.split(':')[1]);net=Math.max(0,(em-sm-p)/60);}var maIdx=isAG()?parseInt(document.getElementById('eingMA').value)||0:activeMaIdx();rememberProject(document.getElementById('eingOrt').value);var obj={ma:maIdx,dat:document.getElementById('eingDat').value,typ:typ,start:s,end:e,pause:p,ort:document.getElementById('eingOrt').value,notiz:document.getElementById('eingNotiz').value,h:parseFloat(net.toFixed(2))};
-if(editingEntryIdx>=0&&entries[editingEntryIdx]){entries[editingEntryIdx]=obj;editingEntryIdx=-1;var eb=document.getElementById('entryEditBanner');if(eb)eb.style.display='none';renderRecent();renderMonth();var cs=saveData();cs.then(function(ok){alert(ok?'Eintrag aktualisiert und mit Cloud synchronisiert!':'Eintrag lokal aktualisiert. Cloud-Sync folgt automatisch.');}).catch(function(){alert('Eintrag lokal aktualisiert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});clearEntry();return;}
+if(editingEntryIdx>=0&&entries[editingEntryIdx]){var original=entries[editingEntryIdx];if(original.pausePruefung&&original.dat===obj.dat&&original.typ===obj.typ&&original.start===obj.start&&original.end===obj.end&&Number(original.pause||0)===Number(obj.pause||0)){obj.pausePruefung=original.pausePruefung;}entries[editingEntryIdx]=obj;editingEntryIdx=-1;var eb=document.getElementById('entryEditBanner');if(eb)eb.style.display='none';renderRecent();renderMonth();var cs=saveData();cs.then(function(ok){alert(ok?'Eintrag aktualisiert und mit Cloud synchronisiert!':'Eintrag lokal aktualisiert. Cloud-Sync folgt automatisch.');}).catch(function(){alert('Eintrag lokal aktualisiert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});clearEntry();return;}
 else{entries.unshift(obj);}
 renderRecent();renderMonth();var cs2=saveData();cs2.then(function(ok){alert(ok?'Eintrag gespeichert und mit Cloud synchronisiert!':'Eintrag lokal gespeichert. Cloud-Sync folgt automatisch, sobald die Verbindung steht.');}).catch(function(){alert('Eintrag lokal gespeichert. Cloud-Synchronisierung ist gerade fehlgeschlagen (wird automatisch nachgeholt).');});clearEntry();}
 function editEntry(i){
@@ -2600,11 +2600,13 @@ function renderMonth(){
 }
 
 // Arbeitgeber-Pausen-VORPRÜFUNG: keine rückwirkend erfundenen Ist-Pausen.
+// Die Prüfung betrachtet die gesamte Arbeit pro Kalendertag, nicht jeden Einsatz isoliert.
 function pauseMinutesRecommended(e){
   if(!e||e.typ!=='arbeit'||!/^\d{2}:\d{2}$/.test(e.start||'')||!/^\d{2}:\d{2}$/.test(e.end||''))return null;
   var a=e.start.split(':').map(Number),b=e.end.split(':').map(Number);
   var gross=b[0]*60+b[1]-a[0]*60-a[1];
   if(gross<=0||gross>24*60)return null;
+  // Vorprüfung anhand Bruttozeit: Pause ist nur ein SOLL-Vorschlag, keine Ist-Pause.
   var minimum=gross>570?45:(gross>360?30:0);
   return {minimum:minimum,gross:gross};
 }
@@ -2613,18 +2615,33 @@ function markPausenVorschlaege(){
   var sel=document.getElementById('filterMA'),idx=sel?parseInt(sel.value):-1,ma=employees[idx];
   if(!ma||!isAzubiMA(ma)){alert('Bitte zuerst einen Azubi im Mitarbeiterfilter auswählen.');return;}
   var matching=entries.filter(function(e){return e.ma===idx&&e.typ==='arbeit'&&e.dat>='2026-07-01'&&e.dat<='2026-10-31';});
-  var affected=matching.filter(function(e){var p=pauseMinutesRecommended(e);return p&&Number(e.pause||0)<p.minimum;});
-  if(!affected.length){alert('Keine neuen Pausenvorschläge für Juli–Oktober 2026. Einträge ohne Start/Ende müssen separat geprüft werden.');return;}
-  if(!confirm('Für '+ma.vn+' '+ma.nl+' '+affected.length+' ungeprüfte Pausenvorschläge speichern?\\n\\nOriginal-Pausen und Netto-Arbeitsstunden werden NICHT geändert. Die Einträge werden nur für eine spätere Prüfung vorgemerkt.'))return;
+  var days={};
+  matching.forEach(function(e){(days[e.dat]||(days[e.dat]=[])).push(e);});
+  var affected=[],unclarified=0,limitWarnings=0;
+  Object.keys(days).forEach(function(dat){
+    var arr=days[dat],valid=arr.map(pauseMinutesRecommended);
+    if(valid.some(function(p){return !p;})){unclarified++;return;}
+    var grossTotal=valid.reduce(function(t,p){return t+p.gross;},0);
+    var breakLogged=arr.reduce(function(t,e){return t+Number(e.pause||0);},0);
+    var min= grossTotal>570?45:(grossTotal>360?30:0);
+    var net=(grossTotal-breakLogged)/60;
+    if(net>10)limitWarnings++;
+    if(breakLogged<min){
+      // Eine Tagesprüfung wird am ersten Arbeitseintrag des Tages gespeichert.
+      affected.push({entry:arr[0],minimum:min,logged:breakLogged,gross:grossTotal,count:arr.length});
+    }
+  });
+  if(!affected.length){alert('Keine neuen Pausenvorschläge. Tage ohne gültige Start-/Endzeit: '+unclarified+'. Arbeitstage über 10 Netto-Stunden: '+limitWarnings+'.');return;}
+  if(!confirm('Für '+ma.vn+' '+ma.nl+' '+affected.length+' Arbeitstage ungeprüfte Pausenvorschläge speichern?\n\nOriginal-Pausen und Netto-Arbeitsstunden bleiben unverändert. '+unclarified+' Tage mit fehlender Zeitangabe müssen manuell geprüft werden.'))return;
   var added=0;
-  affected.forEach(function(e){
-    var p=pauseMinutesRecommended(e);
-    if(e.pausePruefung&&e.pausePruefung.status==='offen'&&e.pausePruefung.mindestPause===p.minimum)return;
-    e.pausePruefung={status:'offen',mindestPause:p.minimum,erfasst:Number(e.pause||0),differenz:p.minimum-Number(e.pause||0),bruttoMin:p.gross,hinweis:'Mindestpause rechnerisch; tatsächliche Pause noch nicht bestätigt',erstelltAm:new Date().toISOString()};
+  affected.forEach(function(a){
+    var e=a.entry;
+    if(e.pausePruefung&&e.pausePruefung.status==='offen'&&e.pausePruefung.mindestPause===a.minimum&&e.pausePruefung.erfasst===a.logged)return;
+    e.pausePruefung={status:'offen',mindestPause:a.minimum,erfasst:a.logged,differenz:a.minimum-a.logged,bruttoMin:a.gross,anzahlEintraege:a.count,hinweis:'Tages-Mindestpause rechnerisch; tatsächliche Pause noch nicht bestätigt',erstelltAm:new Date().toISOString()};
     added++;
   });
   var info=document.getElementById('pausePruefungInfo');
-  if(info)info.textContent=added+' Pausenvorschläge als ungeprüft vorgemerkt. Ursprüngliche Werte unverändert.';
+  if(info)info.textContent=added+' Tage vorgemerkt, '+unclarified+' Tage ohne prüfbare Uhrzeiten, '+limitWarnings+' Tage mit über 10 h rechnerischer Netto-Arbeit. Originale unverändert.';
   saveData();renderMonth();
 }
 // ============ ARBEITGEBER ============
