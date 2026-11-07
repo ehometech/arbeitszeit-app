@@ -741,6 +741,7 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
     <div id="agMaFilter" style="display:none;margin-bottom:10px">
       <select id="filterMA" onchange="renderMonth()" style="width:100%"></select>
     </div>
+    <div id="minijobMonth" class="card" style="display:none" aria-live="polite"></div>
     <div id="agPausenPruefung" class="card" style="display:none;background:#fffbeb;border-color:#fde68a">
       <div class="sec">Pausenprüfung (Arbeitgeber)</div>
       <div style="font-size:12px;color:#92400e;margin-bottom:9px">Vorläufige Pausenvorschläge für Juli–Oktober 2026. Original-Pause, Nettozeit und historische Einträge bleiben unverändert. Keine Bestätigung tatsächlich genommener Pausen.</div>
@@ -1253,6 +1254,12 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
           </div>
           <span class="lbl">Position</span><input type="text" id="maRolle" placeholder="z.B. Maurer, Elektriker">
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0"><input type="checkbox" id="maAzubi" style="width:auto"> Auszubildende/r (Azubi) – Stunden getrennt prüfen</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0"><input type="checkbox" id="maMinijob" style="width:auto" onchange="toggleMinijobFields()"> Minijobber/in</label>
+          <div id="maMinijobFields" hidden>
+            <label class="lbl" for="maStundenlohn">Stundenlohn (€/h, brutto)</label>
+            <input type="text" inputmode="decimal" id="maStundenlohn" placeholder="z.B. 14,50" aria-describedby="maLohnHinweis">
+            <div id="maLohnHinweis" style="font-size:12px;color:#666;margin-top:5px">Optional. Der aktuelle Satz gilt für alle angezeigten Monate, auch rückwirkend. Berechnet werden nur erfasste Netto-Arbeitsstunden.</div>
+          </div>
           <span class="lbl">E-Mail</span><input type="email" id="maEmail" placeholder="anna@firma.de">
           <span class="lbl">Telefon</span><input type="text" id="maTel" placeholder="+49 170 000000">
           <div class="r2">
@@ -2570,6 +2577,41 @@ function getHoursStatsForEntries(me,ma){
     label:azubi?'Zusatzstunden (ungeprüft)':'Abweichung Arbeitstage',
     notice:azubi?'Azubi: Berufsschule zählt zur Ausbildungszeit, erzeugt aber keine Überstunden. Zusatzstunden sind nur ein rechnerischer Prüfwert aus Arbeitstagen über Tages-Soll; keine automatische Verrechnung mit Fehlzeiten, Urlaub oder Freistellung. Pausen, Arbeitszeitgrenzen und Freigaben prüfen.':'Rechnerische Abweichung nur für erfasste Arbeitstage. Keine automatische Bewertung ungeklärter Fehlzeiten oder genehmigter Freistellung.'};
 }
+// Minijob is independent of position and the existing Azubi/time calculations.
+function isMinijobMA(ma){return !!(ma&&(ma.minijob===true||(ma.minijob!==false&&/mini[ -]?job/i.test(ma.rolle||''))));}
+function parseHourlyRate(value){
+  var text=String(value==null?'':value).trim();
+  if(!text)return null;
+  if(!/^\d+(?:[.,]\d{1,2})?$/.test(text))return NaN;
+  var rate=Number(text.replace(',','.'));
+  return Number.isFinite(rate)&&rate>0&&rate<=9999.99?Math.round(rate*100):NaN;
+}
+function toggleMinijobFields(){document.getElementById('maMinijobFields').hidden=!document.getElementById('maMinijob').checked;}
+function getMinijobPay(ma,idx,prefix){
+  var hours=entries.filter(function(e){return e.ma===idx&&e.typ==='arbeit'&&e.dat&&e.dat.startsWith(prefix);}).reduce(function(sum,e){var h=Number(e.h);return sum+(Number.isFinite(h)&&h>0?h:0);},0);
+  var cents=ma.stundenlohnCent;
+  var valid=Number.isInteger(cents)&&cents>0&&cents<=999999;
+  return {hours:hours,rate:valid?cents:null,pay:valid?Math.round(hours*cents):null};
+}
+function renderMinijobMonth(maIdx,prefix){
+  var el=document.getElementById('minijobMonth');if(!el)return;
+  var indices=employees.map(function(ma,i){return i;}).filter(function(i){return isMinijobMA(employees[i])&&(maIdx<0?isAG():i===maIdx);});
+  el.style.display=indices.length?'block':'none';el.replaceChildren();
+  if(!indices.length)return;
+  var title=document.createElement('div');title.className='sec';title.textContent='Minijob · '+monthNames[currentMonth]+' '+currentYear;el.appendChild(title);
+  function euro(cents){return (cents/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});}
+  indices.forEach(function(i){
+    var ma=employees[i],p=getMinijobPay(ma,i,prefix);
+    var row=document.createElement('div');row.className='ent';
+    var info=document.createElement('div');info.className='einfo';
+    var name=document.createElement('div');name.className='etitle';name.textContent=ma.vn+' '+ma.nl;
+    var detail=document.createElement('div');detail.className='esub';detail.textContent=p.hours.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' h Nettoarbeit · '+(p.rate===null?'Stundenlohn fehlt':euro(p.rate)+'/h');
+    var pay=document.createElement('div');pay.style.fontWeight='700';pay.textContent=p.pay===null?'—':euro(p.pay);
+    info.append(name,detail);row.append(info,pay);el.appendChild(row);
+  });
+  var note=document.createElement('div');note.className='esub';note.style.marginTop='8px';note.textContent='Rechnerischer Bruttolohn aus erfasster Nettoarbeit × aktuellem Stundenlohn. Urlaub, Krankheit und Schule sind nicht enthalten. Satzänderungen berechnen auch frühere Monate neu.';el.appendChild(note);
+}
+
 // ============ MONAT ============
 var monthNames=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 function renderAgFilterSelect(){var sel=document.getElementById('filterMA');if(!sel)return;sel.innerHTML='<option value="-1">Alle Mitarbeiter</option>'+employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
@@ -2581,6 +2623,7 @@ function renderMonth(){
   var fSel=document.getElementById('filterMA');
   var filterIdx=(isAG()&&fSel)?parseInt(fSel.value):-1;
   var maIdx=isAG()?filterIdx:activeMaIdx();
+  renderMinijobMonth(maIdx,prefix);
   var panel=document.getElementById('agPausenPruefung');
   if(panel)panel.style.display=(isAG()&&maIdx>=0&&isAzubiMA(employees[maIdx]))?'block':'none';
   var me=entries.filter(function(e){return e.dat&&e.dat.startsWith(prefix)&&(maIdx<0||e.ma===maIdx);});
@@ -2634,10 +2677,10 @@ function renderMAListe(){
   if(!employees.length){el.innerHTML='<div style="color:#888;font-size:13px;padding:16px 0;text-align:center">Noch keine Mitarbeiter angelegt.</div>';return;}
   el.innerHTML=employees.map(function(ma,i){var ci=i%6;return '<div class="ma-row" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="editMA('+i+')">'+'<div class="avt" style="background:'+avatarBg[ci]+';color:'+avatarFg[ci]+'">'+getInitials(ma.vn,ma.nl)+'</div>'+'<div class="einfo"><div class="etitle">'+ma.vn+' '+ma.nl+'</div><div class="esub">'+ma.rolle+' · PIN: ****</div>'+(ma.email?'<div class="esub" style="color:#2563eb">'+ma.email+'</div>':'')+'</div>'+'<button class="btn dan" style="flex:0;padding:5px 9px;font-size:12px" onclick="event.stopPropagation();deleteMA('+i+')">🗑</button></div>';}).join('');
 }
-function openNewMA(){editingMaIdx=-1;document.getElementById('maModalTitle').textContent='Neuer Mitarbeiter';['maVN','maNL','maRolle','maEmail','maTel','maNotiz'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('maWoche').value=35;document.getElementById('maUrlaub').value=24;document.getElementById('maAzubi').checked=false;document.getElementById('maSoll').value=7;document.getElementById('maEintritt').value='';document.getElementById('maPin').value='';document.getElementById('maModalWrap').classList.add('open');}
-function editMA(i){editingMaIdx=i;var ma=employees[i];document.getElementById('maModalTitle').textContent=ma.vn+' '+ma.nl+' bearbeiten';document.getElementById('maVN').value=ma.vn;document.getElementById('maNL').value=ma.nl;document.getElementById('maRolle').value=ma.rolle||'';document.getElementById('maAzubi').checked=isAzubiMA(ma);document.getElementById('maEmail').value=ma.email||'';document.getElementById('maTel').value=ma.tel||'';document.getElementById('maWoche').value=ma.woche;document.getElementById('maUrlaub').value=ma.urlaub;document.getElementById('maSoll').value=ma.soll;document.getElementById('maEintritt').value=ma.eintritt||'';document.getElementById('maNotiz').value=ma.notiz||'';document.getElementById('maPin').value=ma.pin||'';document.getElementById('maModalWrap').classList.add('open');}
+function openNewMA(){if(!isAG())return;document.getElementById('maMinijob').checked=false;document.getElementById('maStundenlohn').value='';toggleMinijobFields();editingMaIdx=-1;document.getElementById('maModalTitle').textContent='Neuer Mitarbeiter';['maVN','maNL','maRolle','maEmail','maTel','maNotiz'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('maWoche').value=35;document.getElementById('maUrlaub').value=24;document.getElementById('maAzubi').checked=false;document.getElementById('maSoll').value=7;document.getElementById('maEintritt').value='';document.getElementById('maPin').value='';document.getElementById('maModalWrap').classList.add('open');}
+function editMA(i){if(!isAG())return;editingMaIdx=i;var ma=employees[i];document.getElementById('maMinijob').checked=isMinijobMA(ma);document.getElementById('maStundenlohn').value=Number.isInteger(ma.stundenlohnCent)?(ma.stundenlohnCent/100).toFixed(2).replace('.',','):'';toggleMinijobFields();document.getElementById('maModalTitle').textContent=ma.vn+' '+ma.nl+' bearbeiten';document.getElementById('maVN').value=ma.vn;document.getElementById('maNL').value=ma.nl;document.getElementById('maRolle').value=ma.rolle||'';document.getElementById('maAzubi').checked=isAzubiMA(ma);document.getElementById('maEmail').value=ma.email||'';document.getElementById('maTel').value=ma.tel||'';document.getElementById('maWoche').value=ma.woche;document.getElementById('maUrlaub').value=ma.urlaub;document.getElementById('maSoll').value=ma.soll;document.getElementById('maEintritt').value=ma.eintritt||'';document.getElementById('maNotiz').value=ma.notiz||'';document.getElementById('maPin').value=ma.pin||'';document.getElementById('maModalWrap').classList.add('open');}
 function closeModal(){document.getElementById('maModalWrap').classList.remove('open');editingMaIdx=-1;}
-function saveMA(){var vn=document.getElementById('maVN').value.trim();var nl=document.getElementById('maNL').value.trim();var pin=String(document.getElementById('maPin').value).trim();if(!vn||!nl){alert('Vor- und Nachname sind Pflichtfelder.');return;}if(!pin||pin.length!==4||isNaN(pin)){alert('Bitte gültigen 4-stelligen PIN vergeben!');return;}if(employees.some(function(ma,i){return String(ma.pin)===pin&&i!==editingMaIdx;})){alert('PIN bereits vergeben.');return;}if(pin===APP_PIN){alert('Dieser PIN ist für den Arbeitgeber reserviert.');return;}var ma={vn:vn,nl:nl,rolle:document.getElementById('maRolle').value.trim()||'Mitarbeiter',azubi:document.getElementById('maAzubi').checked,email:document.getElementById('maEmail').value.trim(),tel:document.getElementById('maTel').value.trim(),woche:parseInt(document.getElementById('maWoche').value)||35,urlaub:parseInt(document.getElementById('maUrlaub').value)||24,soll:parseInt(document.getElementById('maSoll').value)||7,eintritt:document.getElementById('maEintritt').value,notiz:document.getElementById('maNotiz').value.trim(),pin:pin};if(editingMaIdx>=0){employees[editingMaIdx]=ma;alert('Mitarbeiter aktualisiert!');}else{employees.push(ma);alert('✅ '+vn+' '+nl+' angelegt!\nLogin-PIN: '+pin);}closeModal();saveData();renderMAListe();renderMASelect();renderAgFilterSelect();renderFotoMASelect();renderGalFilterSelect();buildUserList();}
+function saveMA(){if(!isAG())return;var minijob=document.getElementById('maMinijob').checked;var rate=parseHourlyRate(document.getElementById('maStundenlohn').value);if(minijob&&Number.isNaN(rate)){alert('Bitte einen gültigen Stundenlohn zwischen 0,01 und 9.999,99 €/h mit höchstens zwei Nachkommastellen eingeben oder das Feld leer lassen.');return;}var vn=document.getElementById('maVN').value.trim();var nl=document.getElementById('maNL').value.trim();var pin=String(document.getElementById('maPin').value).trim();if(!vn||!nl){alert('Vor- und Nachname sind Pflichtfelder.');return;}if(!pin||pin.length!==4||isNaN(pin)){alert('Bitte gültigen 4-stelligen PIN vergeben!');return;}if(employees.some(function(ma,i){return String(ma.pin)===pin&&i!==editingMaIdx;})){alert('PIN bereits vergeben.');return;}if(pin===APP_PIN){alert('Dieser PIN ist für den Arbeitgeber reserviert.');return;}var ma={vn:vn,nl:nl,rolle:document.getElementById('maRolle').value.trim()||'Mitarbeiter',azubi:document.getElementById('maAzubi').checked,email:document.getElementById('maEmail').value.trim(),tel:document.getElementById('maTel').value.trim(),woche:parseInt(document.getElementById('maWoche').value)||35,urlaub:parseInt(document.getElementById('maUrlaub').value)||24,soll:parseInt(document.getElementById('maSoll').value)||7,eintritt:document.getElementById('maEintritt').value,notiz:document.getElementById('maNotiz').value.trim(),pin:pin};if(editingMaIdx>=0)ma=Object.assign({},employees[editingMaIdx],ma);ma.minijob=minijob;if(minijob)ma.stundenlohnCent=rate;if(editingMaIdx>=0){employees[editingMaIdx]=ma;alert('Mitarbeiter aktualisiert!');}else{employees.push(ma);alert('✅ '+vn+' '+nl+' angelegt!\nLogin-PIN: '+pin);}closeModal();saveData();renderMAListe();renderMASelect();renderAgFilterSelect();renderFotoMASelect();renderGalFilterSelect();buildUserList();}
 function deleteMA(i){if(!confirm('Mitarbeiter "'+employees[i].vn+' '+employees[i].nl+'" löschen?'))return;employees.splice(i,1);entries=entries.filter(function(e){return e.ma!==i;});fotos=fotos.filter(function(f){return f.ma!==i;});saveData();renderMAListe();renderMASelect();renderAgFilterSelect();renderFotoMASelect();renderGalFilterSelect();buildUserList();}
 function saveAgPin(){
   var p1=document.getElementById('newAgPin').value.trim();
