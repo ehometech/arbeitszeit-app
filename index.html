@@ -743,11 +743,12 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
     </div>
     <div class="m2">
       <div class="met"><div class="ml">Monat Stunden</div><div class="mv" id="mStd">0,00 h</div></div>
-      <div class="met"><div class="ml">Überstunden</div><div class="mv g" id="mUeber">+0,00 h</div></div>
+      <div class="met"><div class="ml" id="mUeberLabel">Überstunden (rechnerisch)</div><div class="mv g" id="mUeber">+0,00 h</div></div>
     </div>
     <div class="m2">
       <div class="met"><div class="ml">Urlaub übrig</div><div class="mv a" id="mUrl">—</div></div>
       <div class="met"><div class="ml">Krank (Monat)</div><div class="mv r" id="mKrank">0</div></div>
+    <div id="mHoursNotice" style="font-size:12px;line-height:1.45;color:#92400e;background:#fffbeb;border:1px solid #fde68a;padding:10px;border-radius:8px;margin-bottom:10px;display:none"></div>
     </div>
     <div class="card">
       <div class="sec">Einträge</div>
@@ -1245,6 +1246,7 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
             <div><span class="lbl">Nachname *</span><input type="text" id="maNL" placeholder="Müller"></div>
           </div>
           <span class="lbl">Position</span><input type="text" id="maRolle" placeholder="z.B. Maurer, Elektriker">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0"><input type="checkbox" id="maAzubi" style="width:auto"> Auszubildende/r (Azubi) – Stunden getrennt prüfen</label>
           <span class="lbl">E-Mail</span><input type="email" id="maEmail" placeholder="anna@firma.de">
           <span class="lbl">Telefon</span><input type="text" id="maTel" placeholder="+49 170 000000">
           <div class="r2">
@@ -2542,6 +2544,26 @@ function deleteUploadedFoto(publicId){
 function openLightbox(url,info){document.getElementById('lightboxImg').src=url;document.getElementById('lightboxInfo').textContent=info;document.getElementById('lightbox').classList.add('open');}
 function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.getElementById('lightboxImg').src='';}
 
+// Arbeitszeit-Auswertung: Berufsschule ist Ausbildungszeit, keine automatisch anfallende Überstunde.
+// Zusatzstunden bei Azubis sind nur ein Prüfindikator und KEIN genehmigter Saldo.
+// Keine Minusstunden automatisch für Urlaub, Krankheit, Freistellung, fehlende Einträge oder Auftragsmangel.
+function isAzubiMA(ma){return !!(ma&&(ma.azubi===true||(ma.azubi!==false&&/azubi|auszubild|lehrling/i.test(ma.rolle||''))));}
+function getHoursStatsForEntries(me,ma){
+  var soll=(ma&&Number(ma.soll)>0)?Number(ma.soll):7;
+  var arbeit=me.filter(function(e){return e.typ==='arbeit';});
+  var arbeitH=arbeit.reduce(function(a,e){return a+(Number(e.h)||0);},0);
+  var schuleH=me.filter(function(e){return e.typ==='schule';}).reduce(function(a,e){return a+(Number(e.h)||0);},0);
+  var totalH=arbeitH+schuleH;
+  var tage={};
+  arbeit.forEach(function(e){if(e.dat){tage[e.dat]=(tage[e.dat]||0)+(Number(e.h)||0);}});
+  var dates=Object.keys(tage);
+  var zusatz=dates.reduce(function(a,d){return a+Math.max(0,tage[d]-soll);},0);
+  var abweichung=arbeitH-dates.length*soll;
+  var azubi=isAzubiMA(ma);
+  return {totalH:totalH,arbeitH:arbeitH,schuleH:schuleH,ub:azubi?zusatz:abweichung,azubi:azubi,
+    label:azubi?'Zusatzstunden (ungeprüft)':'Abweichung Arbeitstage',
+    notice:azubi?'Azubi: Berufsschule zählt zur Ausbildungszeit, erzeugt aber keine Überstunden. Zusatzstunden sind nur ein rechnerischer Prüfwert aus Arbeitstagen über Tages-Soll; keine automatische Verrechnung mit Fehlzeiten, Urlaub oder Freistellung. Pausen, Arbeitszeitgrenzen und Freigaben prüfen.':'Rechnerische Abweichung nur für erfasste Arbeitstage. Keine automatische Bewertung ungeklärter Fehlzeiten oder genehmigter Freistellung.'};
+}
 // ============ MONAT ============
 var monthNames=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 function renderAgFilterSelect(){var sel=document.getElementById('filterMA');if(!sel)return;sel.innerHTML='<option value="-1">Alle Mitarbeiter</option>'+employees.map(function(ma,i){return '<option value="'+i+'">'+ma.vn+' '+ma.nl+'</option>';}).join('');}
@@ -2554,11 +2576,11 @@ function renderMonth(){
   var filterIdx=(isAG()&&fSel)?parseInt(fSel.value):-1;
   var maIdx=isAG()?filterIdx:activeMaIdx();
   var me=entries.filter(function(e){return e.dat&&e.dat.startsWith(prefix)&&(maIdx<0||e.ma===maIdx);});
-  var totalH=me.reduce(function(a,e){return a+e.h;},0);
-  var arbT=me.filter(function(e){return e.typ==='arbeit';}).length;
-  var soll=maIdx>=0?(employees[maIdx]?employees[maIdx].soll:7):7;
-  var ub=totalH-arbT*soll;
+  var hs=getHoursStatsForEntries(me,maIdx>=0?employees[maIdx]:null);
+  var totalH=hs.totalH,ub=hs.ub;
   var krankT=me.filter(function(e){return e.typ==='krank';}).length;
+  var labelEl=document.getElementById('mUeberLabel');if(labelEl)labelEl.textContent=maIdx<0?'Nur Arbeitstage (Prüfwert)':hs.label;
+  var hint=document.getElementById('mHoursNotice');if(hint){hint.style.display=maIdx<0?'none':'block';hint.textContent=hs.notice;}
   document.getElementById('mStd').textContent=totalH.toFixed(2).replace('.',',')+' h';
   var uEl=document.getElementById('mUeber');uEl.textContent=(ub>=0?'+':'')+ub.toFixed(2).replace('.',',')+' h';uEl.className='mv '+(ub>=0?'g':'r');
   document.getElementById('mKrank').textContent=krankT;
@@ -2576,10 +2598,10 @@ function renderMAListe(){
   if(!employees.length){el.innerHTML='<div style="color:#888;font-size:13px;padding:16px 0;text-align:center">Noch keine Mitarbeiter angelegt.</div>';return;}
   el.innerHTML=employees.map(function(ma,i){var ci=i%6;return '<div class="ma-row" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="editMA('+i+')">'+'<div class="avt" style="background:'+avatarBg[ci]+';color:'+avatarFg[ci]+'">'+getInitials(ma.vn,ma.nl)+'</div>'+'<div class="einfo"><div class="etitle">'+ma.vn+' '+ma.nl+'</div><div class="esub">'+ma.rolle+' · PIN: ****</div>'+(ma.email?'<div class="esub" style="color:#2563eb">'+ma.email+'</div>':'')+'</div>'+'<button class="btn dan" style="flex:0;padding:5px 9px;font-size:12px" onclick="event.stopPropagation();deleteMA('+i+')">🗑</button></div>';}).join('');
 }
-function openNewMA(){editingMaIdx=-1;document.getElementById('maModalTitle').textContent='Neuer Mitarbeiter';['maVN','maNL','maRolle','maEmail','maTel','maNotiz'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('maWoche').value=35;document.getElementById('maUrlaub').value=24;document.getElementById('maSoll').value=7;document.getElementById('maEintritt').value='';document.getElementById('maPin').value='';document.getElementById('maModalWrap').classList.add('open');}
-function editMA(i){editingMaIdx=i;var ma=employees[i];document.getElementById('maModalTitle').textContent=ma.vn+' '+ma.nl+' bearbeiten';document.getElementById('maVN').value=ma.vn;document.getElementById('maNL').value=ma.nl;document.getElementById('maRolle').value=ma.rolle||'';document.getElementById('maEmail').value=ma.email||'';document.getElementById('maTel').value=ma.tel||'';document.getElementById('maWoche').value=ma.woche;document.getElementById('maUrlaub').value=ma.urlaub;document.getElementById('maSoll').value=ma.soll;document.getElementById('maEintritt').value=ma.eintritt||'';document.getElementById('maNotiz').value=ma.notiz||'';document.getElementById('maPin').value=ma.pin||'';document.getElementById('maModalWrap').classList.add('open');}
+function openNewMA(){editingMaIdx=-1;document.getElementById('maModalTitle').textContent='Neuer Mitarbeiter';['maVN','maNL','maRolle','maEmail','maTel','maNotiz'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('maWoche').value=35;document.getElementById('maUrlaub').value=24;document.getElementById('maAzubi').checked=false;document.getElementById('maSoll').value=7;document.getElementById('maEintritt').value='';document.getElementById('maPin').value='';document.getElementById('maModalWrap').classList.add('open');}
+function editMA(i){editingMaIdx=i;var ma=employees[i];document.getElementById('maModalTitle').textContent=ma.vn+' '+ma.nl+' bearbeiten';document.getElementById('maVN').value=ma.vn;document.getElementById('maNL').value=ma.nl;document.getElementById('maRolle').value=ma.rolle||'';document.getElementById('maAzubi').checked=isAzubiMA(ma);document.getElementById('maEmail').value=ma.email||'';document.getElementById('maTel').value=ma.tel||'';document.getElementById('maWoche').value=ma.woche;document.getElementById('maUrlaub').value=ma.urlaub;document.getElementById('maSoll').value=ma.soll;document.getElementById('maEintritt').value=ma.eintritt||'';document.getElementById('maNotiz').value=ma.notiz||'';document.getElementById('maPin').value=ma.pin||'';document.getElementById('maModalWrap').classList.add('open');}
 function closeModal(){document.getElementById('maModalWrap').classList.remove('open');editingMaIdx=-1;}
-function saveMA(){var vn=document.getElementById('maVN').value.trim();var nl=document.getElementById('maNL').value.trim();var pin=String(document.getElementById('maPin').value).trim();if(!vn||!nl){alert('Vor- und Nachname sind Pflichtfelder.');return;}if(!pin||pin.length!==4||isNaN(pin)){alert('Bitte gültigen 4-stelligen PIN vergeben!');return;}if(employees.some(function(ma,i){return String(ma.pin)===pin&&i!==editingMaIdx;})){alert('PIN bereits vergeben.');return;}if(pin===APP_PIN){alert('Dieser PIN ist für den Arbeitgeber reserviert.');return;}var ma={vn:vn,nl:nl,rolle:document.getElementById('maRolle').value.trim()||'Mitarbeiter',email:document.getElementById('maEmail').value.trim(),tel:document.getElementById('maTel').value.trim(),woche:parseInt(document.getElementById('maWoche').value)||35,urlaub:parseInt(document.getElementById('maUrlaub').value)||24,soll:parseInt(document.getElementById('maSoll').value)||7,eintritt:document.getElementById('maEintritt').value,notiz:document.getElementById('maNotiz').value.trim(),pin:pin};if(editingMaIdx>=0){employees[editingMaIdx]=ma;alert('Mitarbeiter aktualisiert!');}else{employees.push(ma);alert('✅ '+vn+' '+nl+' angelegt!\nLogin-PIN: '+pin);}closeModal();saveData();renderMAListe();renderMASelect();renderAgFilterSelect();renderFotoMASelect();renderGalFilterSelect();buildUserList();}
+function saveMA(){var vn=document.getElementById('maVN').value.trim();var nl=document.getElementById('maNL').value.trim();var pin=String(document.getElementById('maPin').value).trim();if(!vn||!nl){alert('Vor- und Nachname sind Pflichtfelder.');return;}if(!pin||pin.length!==4||isNaN(pin)){alert('Bitte gültigen 4-stelligen PIN vergeben!');return;}if(employees.some(function(ma,i){return String(ma.pin)===pin&&i!==editingMaIdx;})){alert('PIN bereits vergeben.');return;}if(pin===APP_PIN){alert('Dieser PIN ist für den Arbeitgeber reserviert.');return;}var ma={vn:vn,nl:nl,rolle:document.getElementById('maRolle').value.trim()||'Mitarbeiter',azubi:document.getElementById('maAzubi').checked,email:document.getElementById('maEmail').value.trim(),tel:document.getElementById('maTel').value.trim(),woche:parseInt(document.getElementById('maWoche').value)||35,urlaub:parseInt(document.getElementById('maUrlaub').value)||24,soll:parseInt(document.getElementById('maSoll').value)||7,eintritt:document.getElementById('maEintritt').value,notiz:document.getElementById('maNotiz').value.trim(),pin:pin};if(editingMaIdx>=0){employees[editingMaIdx]=ma;alert('Mitarbeiter aktualisiert!');}else{employees.push(ma);alert('✅ '+vn+' '+nl+' angelegt!\nLogin-PIN: '+pin);}closeModal();saveData();renderMAListe();renderMASelect();renderAgFilterSelect();renderFotoMASelect();renderGalFilterSelect();buildUserList();}
 function deleteMA(i){if(!confirm('Mitarbeiter "'+employees[i].vn+' '+employees[i].nl+'" löschen?'))return;employees.splice(i,1);entries=entries.filter(function(e){return e.ma!==i;});fotos=fotos.filter(function(f){return f.ma!==i;});saveData();renderMAListe();renderMASelect();renderAgFilterSelect();renderFotoMASelect();renderGalFilterSelect();buildUserList();}
 function saveAgPin(){
   var p1=document.getElementById('newAgPin').value.trim();
@@ -2848,13 +2870,11 @@ function getMonthStats(){
   var me=d.me, maIdx=d.maIdx;
   var ma=maIdx>=0?employees[maIdx]:null;
   var firmaN=(firma&&firma.name)?firma.name:(document.getElementById('agFirma')?document.getElementById('agFirma').value.trim():'');
-  var totalH=me.reduce(function(a,e){return a+e.h;},0);
-  var arbT=me.filter(function(e){return e.typ==='arbeit';}).length;
-  var soll=ma?ma.soll:7;
-  var ub=totalH-arbT*soll;
+  var hs=getHoursStatsForEntries(me,ma);
+  var totalH=hs.totalH,ub=hs.ub;
   var krankT=me.filter(function(e){return e.typ==='krank';}).length;
   var urlG=ma?entries.filter(function(e){return e.ma===maIdx&&e.typ==='urlaub';}).length:null;
-  return {me:me,maIdx:maIdx,ma:ma,firma:firmaN,totalH:totalH,ub:ub,krankT:krankT,urlG:urlG,allMA:(maIdx<0)};
+  return {me:me,maIdx:maIdx,ma:ma,firma:firmaN,totalH:totalH,ub:ub,ubLabel:hs.label,hoursNotice:hs.notice,krankT:krankT,urlG:urlG,allMA:(maIdx<0)};
 }
 function exportPDF(){
   var hasLib = window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && typeof window.jspdf.jsPDF.API.autoTable==='function';
@@ -2874,9 +2894,10 @@ function exportPDF(){
     doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(17,17,17);
     doc.text(monthNames[currentMonth]+' '+currentYear,M,y);y+=7;
     doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(60,60,60);
-    var summ='Gesamt: '+s.totalH.toFixed(2).replace('.',',')+' h     Überstunden: '+(s.ub>=0?'+':'')+s.ub.toFixed(2).replace('.',',')+' h     Kranktage: '+s.krankT;
+    var summ='Gesamt: '+s.totalH.toFixed(2).replace('.',',')+' h     '+s.ubLabel+': '+(s.ub>=0?'+':'')+s.ub.toFixed(2).replace('.',',')+' h     Kranktage: '+s.krankT;
     if(s.ma&&s.urlG!==null)summ+='     Urlaub übrig: '+(s.ma.urlaub-s.urlG)+'/'+s.ma.urlaub;
     doc.text(summ,M,y);y+=4;
+    if(s.ma){doc.setFontSize(7);doc.setTextColor(120,95,40);doc.text('Rechnerischer Prüfwert; keine automatische Anerkennung/Verrechnung von Überstunden oder Minusstunden.',M,y+2);y+=6;doc.setFontSize(10);doc.setTextColor(60,60,60);}
     var head=s.allMA?[['Datum','Typ','Mitarbeiter','Start','Ende','Pause','Netto','Ort / Notiz']]
                     :[['Datum','Typ','Start','Ende','Pause','Netto','Ort / Notiz']];
     var body=s.me.map(function(e){
@@ -2950,7 +2971,8 @@ function exportPDFprint(){
     +(s.ma?'<div class="meta">'+s.ma.vn+' '+s.ma.nl+(s.ma.rolle?' · '+s.ma.rolle:'')+'</div>':'')
     +'</div><div style="font-size:10px;color:#888">Erstellt am '+new Date().toLocaleDateString('de-DE')+'</div></div>'
     +'<div class="period">'+monthNames[currentMonth]+' '+currentYear+'</div>'
-    +'<div class="summary"><b>Gesamt:</b> '+s.totalH.toFixed(2).replace('.',',')+' h &nbsp;&nbsp; <b>Überstunden:</b> '+(s.ub>=0?'+':'')+s.ub.toFixed(2).replace('.',',')+' h &nbsp;&nbsp; <b>Kranktage:</b> '+s.krankT+(s.ma&&s.urlG!==null?' &nbsp;&nbsp; <b>Urlaub übrig:</b> '+(s.ma.urlaub-s.urlG)+'/'+s.ma.urlaub:'')+'</div>'
+    +'<div class="summary"><b>Gesamt:</b> '+s.totalH.toFixed(2).replace('.',',')+' h &nbsp;&nbsp; <b>'+s.ubLabel+':</b> '+(s.ub>=0?'+':'')+s.ub.toFixed(2).replace('.',',')+' h &nbsp;&nbsp; <b>Kranktage:</b> '+s.krankT+(s.ma&&s.urlG!==null?' &nbsp;&nbsp; <b>Urlaub übrig:</b> '+(s.ma.urlaub-s.urlG)+'/'+s.ma.urlaub:'')+'</div>'
+    +(s.ma?'<div class="summary">Rechnerischer Prüfwert; keine automatische Anerkennung/Verrechnung von Überstunden oder Minusstunden.</div>':'')
     +'<table><thead><tr><th>Datum</th><th>Typ</th>'+(s.allMA?'<th>Mitarbeiter</th>':'')
     +'<th style="text-align:center">Start</th><th style="text-align:center">Ende</th><th style="text-align:center">Pause</th><th style="text-align:right">Netto</th><th>Ort / Notiz</th></tr></thead><tbody>'
     +(rows||'<tr><td colspan="'+(s.allMA?8:7)+'" style="text-align:center;padding:18px;color:#888">Keine Einträge in diesem Monat.</td></tr>')
