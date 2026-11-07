@@ -741,6 +741,12 @@ input:focus,select:focus,textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3p
     <div id="agMaFilter" style="display:none;margin-bottom:10px">
       <select id="filterMA" onchange="renderMonth()" style="width:100%"></select>
     </div>
+    <div id="agPausenPruefung" class="card" style="display:none;background:#fffbeb;border-color:#fde68a">
+      <div class="sec">Pausenprüfung (Arbeitgeber)</div>
+      <div style="font-size:12px;color:#92400e;margin-bottom:9px">Vorläufige Pausenvorschläge für Juli–Oktober 2026. Original-Pause, Nettozeit und historische Einträge bleiben unverändert. Keine Bestätigung tatsächlich genommener Pausen.</div>
+      <button class="btn" onclick="markPausenVorschlaege()">Pausen für ausgewählten Mitarbeiter vormerken</button>
+      <div id="pausePruefungInfo" style="font-size:12px;margin-top:8px"></div>
+    </div>
     <div class="m2">
       <div class="met"><div class="ml">Monat Stunden</div><div class="mv" id="mStd">0,00 h</div></div>
       <div class="met"><div class="ml" id="mUeberLabel">Überstunden (rechnerisch)</div><div class="mv g" id="mUeber">+0,00 h</div></div>
@@ -2575,6 +2581,8 @@ function renderMonth(){
   var fSel=document.getElementById('filterMA');
   var filterIdx=(isAG()&&fSel)?parseInt(fSel.value):-1;
   var maIdx=isAG()?filterIdx:activeMaIdx();
+  var panel=document.getElementById('agPausenPruefung');
+  if(panel)panel.style.display=(isAG()&&maIdx>=0&&isAzubiMA(employees[maIdx]))?'block':'none';
   var me=entries.filter(function(e){return e.dat&&e.dat.startsWith(prefix)&&(maIdx<0||e.ma===maIdx);});
   var hs=getHoursStatsForEntries(me,maIdx>=0?employees[maIdx]:null);
   var totalH=hs.totalH,ub=hs.ub;
@@ -2588,9 +2596,37 @@ function renderMonth(){
   else document.getElementById('mUrl').textContent='—';
   var mel=document.getElementById('monthEntries');
   var meIdx=entries.map(function(e,i){return {e:e,i:i};}).filter(function(x){return x.e.dat&&x.e.dat.startsWith(prefix)&&(maIdx<0||x.e.ma===maIdx);});
-  mel.innerHTML=meIdx.length?meIdx.map(function(x){var e=x.e;var ma=employees[e.ma]||{vn:'?',nl:''};var ml=isAG()?' · '+ma.vn+' '+ma.nl:'';var tail=isAG()?'<div style="display:flex;gap:4px;flex-shrink:0"><button class="btn" style="flex:0;padding:4px 9px;font-size:12px" onclick="editEntry('+x.i+')">✎</button><button class="btn dan" style="flex:0;padding:4px 9px;font-size:12px" onclick="deleteEntry('+x.i+')">🗑</button></div>':'<span class="bdg '+eBdg[e.typ]+'">'+eLabels[e.typ]+'</span>';return '<div class="ent"><div class="edot" style="background:'+eColors[e.typ]+'"></div><div class="einfo"><div class="etitle">'+eLabels[e.typ]+(e.h?' — '+e.h.toFixed(2).replace('.',',')+' h':'')+'</div><div class="esub">'+e.dat+ml+(e.ort?' · '+e.ort:'')+'</div></div>'+tail+'</div>';}).join(''):'<div style="color:#888;font-size:13px;padding:12px 0;text-align:center">Keine Einträge.</div>';
+  mel.innerHTML=meIdx.length?meIdx.map(function(x){var e=x.e;var ma=employees[e.ma]||{vn:'?',nl:''};var ml=isAG()?' · '+ma.vn+' '+ma.nl:'';var tail=isAG()?'<div style="display:flex;gap:4px;flex-shrink:0"><button class="btn" style="flex:0;padding:4px 9px;font-size:12px" onclick="editEntry('+x.i+')">✎</button><button class="btn dan" style="flex:0;padding:4px 9px;font-size:12px" onclick="deleteEntry('+x.i+')">🗑</button></div>':'<span class="bdg '+eBdg[e.typ]+'">'+eLabels[e.typ]+'</span>';return '<div class="ent"><div class="edot" style="background:'+eColors[e.typ]+'"></div><div class="einfo"><div class="etitle">'+eLabels[e.typ]+(e.h?' — '+e.h.toFixed(2).replace('.',',')+' h':'')+'</div><div class="esub">'+e.dat+ml+(e.ort?' · '+e.ort:'')+(e.pausePruefung&&e.pausePruefung.status==='offen'?' · ⚠ Pausenvorschlag '+e.pausePruefung.mindestPause+' min (ungeprüft)':'')+'</div></div>'+tail+'</div>';}).join(''):'<div style="color:#888;font-size:13px;padding:12px 0;text-align:center">Keine Einträge.</div>';
 }
 
+// Arbeitgeber-Pausen-VORPRÜFUNG: keine rückwirkend erfundenen Ist-Pausen.
+function pauseMinutesRecommended(e){
+  if(!e||e.typ!=='arbeit'||!/^\\d{2}:\\d{2}$/.test(e.start||'')||!/^\\d{2}:\\d{2}$/.test(e.end||''))return null;
+  var a=e.start.split(':').map(Number),b=e.end.split(':').map(Number);
+  var gross=b[0]*60+b[1]-a[0]*60-a[1];
+  if(gross<=0||gross>24*60)return null;
+  var minimum=gross>570?45:(gross>360?30:0);
+  return {minimum:minimum,gross:gross};
+}
+function markPausenVorschlaege(){
+  if(!isAG()){alert('Nur Arbeitgeber dürfen Pausenvorschläge vormerken.');return;}
+  var sel=document.getElementById('filterMA'),idx=sel?parseInt(sel.value):-1,ma=employees[idx];
+  if(!ma||!isAzubiMA(ma)){alert('Bitte zuerst einen Azubi im Mitarbeiterfilter auswählen.');return;}
+  var matching=entries.filter(function(e){return e.ma===idx&&e.typ==='arbeit'&&e.dat>='2026-07-01'&&e.dat<='2026-10-31';});
+  var affected=matching.filter(function(e){var p=pauseMinutesRecommended(e);return p&&Number(e.pause||0)<p.minimum;});
+  if(!affected.length){alert('Keine neuen Pausenvorschläge für Juli–Oktober 2026. Einträge ohne Start/Ende müssen separat geprüft werden.');return;}
+  if(!confirm('Für '+ma.vn+' '+ma.nl+' '+affected.length+' ungeprüfte Pausenvorschläge speichern?\\n\\nOriginal-Pausen und Netto-Arbeitsstunden werden NICHT geändert. Die Einträge werden nur für eine spätere Prüfung vorgemerkt.'))return;
+  var added=0;
+  affected.forEach(function(e){
+    var p=pauseMinutesRecommended(e);
+    if(e.pausePruefung&&e.pausePruefung.status==='offen'&&e.pausePruefung.mindestPause===p.minimum)return;
+    e.pausePruefung={status:'offen',mindestPause:p.minimum,erfasst:Number(e.pause||0),differenz:p.minimum-Number(e.pause||0),bruttoMin:p.gross,hinweis:'Mindestpause rechnerisch; tatsächliche Pause noch nicht bestätigt',erstelltAm:new Date().toISOString()};
+    added++;
+  });
+  var info=document.getElementById('pausePruefungInfo');
+  if(info)info.textContent=added+' Pausenvorschläge als ungeprüft vorgemerkt. Ursprüngliche Werte unverändert.';
+  saveData();renderMonth();
+}
 // ============ ARBEITGEBER ============
 function saveFirma(){firma={name:document.getElementById('agFirma').value.trim(),str:document.getElementById('agStr').value.trim(),plz:document.getElementById('agPlz').value.trim()};saveData();}
 function renderMAListe(){
@@ -2907,7 +2943,7 @@ function exportPDF(){
       var ende=(e.end&&e.end!=='--')?e.end:'-';
       var pause=e.pause?e.pause+' min':'-';
       var netto=e.h?e.h.toFixed(2).replace('.',',')+' h':'-';
-      var on=(e.ort||'')+((e.ort&&e.notiz)?' - ':'')+(e.notiz||'');
+      var on=(e.ort||'')+((e.ort&&e.notiz)?' - ':'')+(e.notiz||'')+(e.pausePruefung&&e.pausePruefung.status==='offen'?' | Pausenvorschlag '+e.pausePruefung.mindestPause+' min (ungeprüft; Ist-Pause unverändert)':'');
       if(s.allMA){var mn=employees[e.ma]?employees[e.ma].vn+' '+employees[e.ma].nl:'';return [datum,typ,mn,start,ende,pause,netto,on];}
       return [datum,typ,start,ende,pause,netto,on];
     });
@@ -2948,7 +2984,7 @@ function exportPDFprint(){
       +'<td style="text-align:center">'+(e.end&&e.end!=='--'?e.end:'-')+'</td>'
       +'<td style="text-align:center">'+(e.pause?e.pause+' min':'-')+'</td>'
       +'<td style="text-align:right;font-weight:600">'+(e.h?e.h.toFixed(2).replace('.',',')+' h':'-')+'</td>'
-      +'<td>'+(e.ort||'')+((e.ort&&e.notiz)?' - ':'')+(e.notiz||'')+'</td>'
+      +'<td>'+(e.ort||'')+((e.ort&&e.notiz)?' - ':'')+(e.notiz||'')+(e.pausePruefung&&e.pausePruefung.status==='offen'?' | Pausenvorschlag '+e.pausePruefung.mindestPause+' min (ungeprüft)':'')+'</td>'
       +'</tr>';
   }).join('');
   var html='<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Arbeitszeitbericht</title><style>'
